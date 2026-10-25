@@ -14,13 +14,33 @@ function request(method,url,body,done){if(url.charAt(0)==='/')url=location.proto
   function schedulePoll(delay){if(timer)clearTimeout(timer);timer=setTimeout(poll,delay)}
   function pollDelay(data){var item=data&&data.item;if(!item)return 60000;if(!data.is_playing)return 60000;var duration=item.duration_ms||0,progress=data.progress_ms||0,remaining=duration-progress;if(remaining>0&&remaining<=60000)return Math.max(10000,Math.min(30000,remaining-3000));return 30000}
   function updateTimeline(){if(!current||!current.item){id('timeline-fill').style.width='0%';id('time-elapsed').innerHTML='0:00';id('time-duration').innerHTML='0:00';return}var duration=current.item.duration_ms||0,elapsed=current.progress_ms||0;if(current.is_playing)elapsed+=Date.now()-current.fetched_at;if(elapsed>duration)elapsed=duration;var pct=duration?Math.min(100,elapsed/duration*100):0;id('timeline-fill').style.width=pct+'%';id('time-elapsed').innerHTML=formatTime(elapsed);id('time-duration').innerHTML=formatTime(duration)}
-  function setPlaying(isPlaying){id('play').className=isPlaying?'play icon-play is-playing':'play icon-play'}
-  function render(data){var item=data&&data.item;if(!item){id('title').innerHTML='Nothing playing';id('artist').className='empty-state';id('artist').innerHTML='No active track detected. Automatic checks are spaced up to 60 seconds to reduce server usage. Use Refresh now to check immediately.';id('album').innerHTML='';id('minimalist-artist').innerHTML='';id('minimalist-title').innerHTML='Nothing playing';id('art').style.display='none';id('placeholder').className='';setPlaying(false);current=null;updateTimeline();if(winamp)winamp.update(null);return}current=data;current.fetched_at=Date.now();var artist=item.artists.map(function(a){return a.name}).join(', ');id('title').innerHTML=item.name;id('artist').className='';id('artist').innerHTML=artist;id('album').innerHTML=item.album.name;id('minimalist-artist').innerHTML=artist;id('minimalist-title').innerHTML=item.name;setPlaying(!!data.is_playing);if(winamp)winamp.update(data);if(item.album.images&&item.album.images.length){id('art').src=item.album.images[0].url;id('art').style.display='block';id('placeholder').className='hidden'}updateTimeline()}
+  // Winamp spectrum visualizer animation loop
+  var winampAnimFrameId = null;
+  function startWinampVisualizer() {
+    if (winampAnimFrameId || !window.updateVisualizer || !window.analyzeNow) return;
+    function updateWinampFrame() {
+      var analysis = window.analyzeNow();
+      if (analysis && analysis.frequencies) {
+        window.updateVisualizer(analysis);
+      }
+      winampAnimFrameId = requestAnimationFrame(updateWinampFrame);
+    }
+    winampAnimFrameId = requestAnimationFrame(updateWinampFrame);
+  }
+  function stopWinampVisualizer() {
+    if (winampAnimFrameId) {
+      cancelAnimationFrame(winampAnimFrameId);
+      winampAnimFrameId = null;
+    }
+  }
+
+  function setPlaying(isPlaying){id('play').className=isPlaying?'play icon-play is-playing':'play icon-play';if(isPlaying){startWinampVisualizer()}else{stopWinampVisualizer()}}
+  function render(data){var item=data&&data.item;if(!item){id('title').innerHTML='Nothing playing';id('artist').className='empty-state';id('artist').innerHTML='No active track detected. Automatic checks are spaced up to 60 seconds to reduce server usage. Use Refresh now to check immediately.';id('album').innerHTML='';id('minimalist-artist').innerHTML='';id('minimalist-title').innerHTML='Nothing playing';id('art').style.display='none';id('placeholder').className='';setPlaying(false);current=null;updateTimeline();if(winamp)winamp.update(null);if(window.audioClock){window.audioClock.pause();window.audioClock.setPausedAt(0);}return}var trackId=item.id;var isSameTrack=current&&current.item&&current.item.id===trackId;if(!isSameTrack){window.currentTrackId=trackId;if(window.requestAudioAnalysis)window.requestAudioAnalysis();}if(window.audioClock){if(data.is_playing){window.audioClock.setProgress(data.progress_ms||0);window.audioClock.resume();}else{window.audioClock.pause();window.audioClock.setPausedAt(data.progress_ms||0);}}current=data;current.fetched_at=Date.now();var artist=item.artists.map(function(a){return a.name}).join(', ');id('title').innerHTML=item.name;id('artist').className='';id('artist').innerHTML=artist;id('album').innerHTML=item.album.name;id('minimalist-artist').innerHTML=artist;id('minimalist-title').innerHTML=item.name;setPlaying(!!data.is_playing);if(winamp)winamp.update(data);if(item.album.images&&item.album.images.length){id('art').src=item.album.images[0].url;id('art').style.display='block';id('placeholder').className='hidden'}updateTimeline()}
   function poll(){if(document.hidden){return}setLoading(true);request('GET','/api/spotify/currently-playing',null,function(status,data){setLoading(false);if(status===200){render(data);playerMessage(data&&data.item?'Playback updated.':'No active track. Automatic checks resume within 60 seconds.');schedulePoll(pollDelay(data))}else if(status===401){id('status').innerHTML='Not connected';playerMessage(data.error||'Pair again.');schedulePoll(60000)}else{playerMessage('Waiting for Spotify…');schedulePoll(60000)}})}
   function command(action){request('POST','/api/spotify/command',{action:action},function(status,data){if(status!==200)id('player-message').innerHTML=data.error||'Command failed';schedulePoll(750)})}
   setInterval(updateTimeline,1000);
   function closeBadgeModal(){id('badge-modal').className='modal hidden'}
-  function createBadge(){var url = '/api/badge/create?t='+Date.now(); request('POST', url, {}, function(status,data){if(status===200){var markdown='[![Last played on Spotify]('+data.url+')](https://'+window.location.host+'/)';id('badge-preview').src=data.url+'?t='+Date.now();id('badge-code').value=markdown;id('badge-modal').className='modal';id('badge-code').focus();id('badge-code').select()}else id('player-message').innerHTML=data.error||'Could not create badge.'})}
+  function createBadge(){var url = '/api/badge/create?badgeId='+Date.now(); request('POST', url, {}, function(status,data){if(status===200){var markdown='[![Last played on Spotify]('+data.url+')]('+window.location.origin+'/)';id('badge-preview').src=data.url+'?t='+Date.now();id('badge-code').value=markdown;id('badge-modal').className='modal';id('badge-code').focus();id('badge-code').select()}else id('player-message').innerHTML=data.error||'Could not create badge.'})}
   function escapeHtml(text){return text.replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
   function openArtistModal(){id('artist-modal').className='modal';switchSearchMode('artist');id('artist-query').value='';id('playlist-query').value='';id('artist-results').innerHTML='';id('artist-message').innerHTML='';id('artist-query').focus()}
   function closeArtistModal(){id('artist-modal').className='modal hidden'}

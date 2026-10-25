@@ -134,7 +134,7 @@ test('every skin image referenced by winamp.css exists', () => {
 });
 
 test('front-end scripts stay ES5 for iOS 9 Safari', () => {
-  ['winamp.js', 'app.js', 'vendor/oldmilk/oldmilk.js'].forEach((file) => {
+  ['winamp.js', 'app.js', 'vendor/oldmilk/oldmilk.js', 'public/js/audio-analysis-engine.js', 'public/js/winamp-vis-renderer.js'].forEach((file) => {
     const src = fs.readFileSync(path.join(root, file), 'utf8');
     assert.doesNotMatch(src, /(^|[^.\w])(let|const|class)\s/m, file);
     assert.doesNotMatch(src, /=>|`/, file);
