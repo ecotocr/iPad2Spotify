@@ -39,6 +39,12 @@ test('positionMs advances only while playing and clamps to duration', () => {
   assert.strictEqual(W.positionMs(W.fromSpotify(null, 0), 5000), 0);
 });
 
+test('fromSpotify preserves the original fetch time when entering Winamp mode', () => {
+  const s = W.fromSpotify(track({ fetched_at: 1000 }), 12000);
+  assert.strictEqual(s.fetchedAt, 1000);
+  assert.strictEqual(W.positionMs(s, 11000), 40000);
+});
+
 test('spectrum is deterministic, bounded and track-dependent', () => {
   const p = W.trackProfile('abc123');
   const a = W.spectrum(p, 42.5, 200, flatEq(), new Array(19));

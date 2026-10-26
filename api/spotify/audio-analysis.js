@@ -28,7 +28,12 @@ function sanitizeAnalysis(data) {
         result[i] = {};
         for (var j in arr[i]) {
           var val = arr[i][j];
-          if (['start', 'duration', 'liveness', 'energy', 'mode', 'key'].indexOf(j) >= 0 || typeof val === 'number') {
+          if ((j === 'pitches' || j === 'timbre') && Array.isArray(val)) {
+            result[i][j] = [];
+            for (var k = 0; k < 12 && k < val.length; k++) {
+              if (typeof val[k] === 'number' && isFinite(val[k])) result[i][j].push(val[k]);
+            }
+          } else if (['start', 'duration', 'liveness', 'energy', 'mode', 'key'].indexOf(j) >= 0 || typeof val === 'number') {
             result[i][j] = val;
           }
         }
@@ -85,33 +90,56 @@ function shrink(payload) {
     segments: payload.segments || []
   };
   var budget = 20000;
-  if (JSON.stringify(p).length <= budget) return p;
+  function fits() { return JSON.stringify(p).length <= budget; }
+  function sampled(source, step, compact) {
+    var result = [];
+    for (var i = 0; i < source.length; i += step) {
+      var segment = source[i] || {};
+      result.push(compact ? {
+        start: segment.start,
+        duration: segment.duration,
+        loudness_max: segment.loudness_max,
+        pitches: segment.pitches || []
+      } : segment);
+    }
+    if (source.length && (source.length - 1) % step !== 0) {
+      var last = source[source.length - 1] || {};
+      result.push(compact ? {
+        start: last.start,
+        duration: last.duration,
+        loudness_max: last.loudness_max,
+        pitches: last.pitches || []
+      } : last);
+    }
+    return result;
+  }
+  if (fits()) return p;
 
   // 1) Drop tatums + beats (timing is already in bars/sections).
   p.tatums = [];
   p.beats = [];
-  if (JSON.stringify(p).length <= budget) return p;
+  if (fits()) return p;
 
-  // 2) Coarsen segments: keep every second one, then every fourth, etc.
+  // 2) Coarsen segments until the serialized response fits the advertised budget.
   var segments = p.segments;
-  for (var step = 2; step <= 16; step *= 2) {
-    var kept = [];
-    for (var i = 0; i < segments.length; i += step) kept.push(segments[i]);
-    p.segments = kept;
-    if (JSON.stringify(p).length <= budget) return p;
+  var step = 2;
+  while (step <= segments.length) {
+    p.segments = sampled(segments, step, false);
+    if (fits()) return p;
+    step *= 2;
   }
 
-  // 3) Keep only the smallest set of segment fields.
-  p.segments = segments.filter ? (function () {
-    var out = [];
-    for (var i = 0; i < segments.length; i += 16) {
-      var s = segments[i] || {};
-      out.push({ start: s.start, duration: s.duration, loudness_max: s.loudness_max, pitches: s.pitches || [] });
-    }
-    return out;
-  })() : [];
+  // 3) Drop redundant timing arrays and keep compact, usable spectrum segments.
   p.bars = [];
   p.sections = [];
+  step = 1;
+  while (step <= segments.length) {
+    p.segments = sampled(segments, step, true);
+    if (fits()) return p;
+    step *= 2;
+  }
+
+  p.segments = [];
   return p;
 }
 

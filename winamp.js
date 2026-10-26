@@ -101,7 +101,8 @@
   // Normalises Spotify's currently-playing payload. "item: null" (HTTP 200 or 204) means stopped.
   function fromSpotify(data, now) {
     var item = data && data.item;
-    if (!item) return { status: 'stopped', trackId: null, title: '', artist: '', album: '', durationMs: 0, progressMs: 0, fetchedAt: now };
+    var fetchedAt = data && typeof data.fetched_at === 'number' && isFinite(data.fetched_at) ? data.fetched_at : now;
+    if (!item) return { status: 'stopped', trackId: null, title: '', artist: '', album: '', durationMs: 0, progressMs: 0, fetchedAt: fetchedAt };
     var artists = [];
     for (var i = 0; item.artists && i < item.artists.length; i++) artists.push(item.artists[i].name);
     var artist = artists.join(', ');
@@ -113,7 +114,7 @@
       album: (item.album && item.album.name) || '',
       durationMs: item.duration_ms || 0,
       progressMs: data.progress_ms || 0,
-      fetchedAt: now
+      fetchedAt: fetchedAt
     };
   }
   function positionMs(state, now) {
@@ -654,7 +655,14 @@
       }
       if (!milk) return;
 
-      // VisMap integration: use pre-calculated beat-locked bands if available
+      var mb = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
+      if (mb && mb.trackId === state.trackId && realBands(mb.frequencies, settings.eq, milkLevels)) {
+        milk.setBands(milkLevels);
+        milk.render(tSec);
+        return;
+      }
+
+      // VisMap remains a fallback when Spotify analysis is unavailable.
       var progressMs = Math.round(tSec * 1000);
       if (currentVisMap && currentVisMap.type === 'bpm_grid' && currentVisMapTrackId === state.trackId) {
         var interval = currentVisMap.interval_ms;
@@ -679,12 +687,6 @@
         }
       }
 
-      var mb = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
-      if (mb && mb.trackId === state.trackId && realBands(mb.frequencies, settings.eq, milkLevels)) {
-        milk.setBands(milkLevels);
-        milk.render(tSec);
-        return;
-      }
       // Fallback to deterministic pseudo-spectrum
       spectrum(profile, tSec, state.durationMs / 1000, settings.eq, milkLevels);
       milk.setBands(milkLevels);

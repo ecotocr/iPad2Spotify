@@ -22,8 +22,6 @@
 
   window.winampVisStart = function () {
     active = true;
-    // Ensure the engine has data for the current track before the loop shows it.
-    if (window.requestAudioAnalysis) window.requestAudioAnalysis();
   };
 
   window.winampVisStop = function () {
