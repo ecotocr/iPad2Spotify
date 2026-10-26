@@ -5,15 +5,23 @@ var helpers = require('./helpers');
 var lib = require('../api/_lib');
 var audioAnalysis = require('../api/spotify/audio-analysis');
 
-function callWithSegments(segments) {
+function callWithSegments(segments, options) {
+  options = options || {};
+  var counters = options.counters || {};
+  function count(name) { counters[name] = (counters[name] || 0) + 1; }
   var originals = {};
   var replacements = {
-    getSession: function (req, res, callback) { callback(null, { refresh_token: 'refresh-token' }); },
+    getSession: function (req, res, callback) { count('session'); callback(null, { refresh_token: 'refresh-token' }); },
     config: function () { return {}; },
-    spotifyToken: function (cfg, body, callback) { callback(null, 200, { access_token: 'access-token' }); },
+    memoryRateLimit: function (req, bucket, limit, seconds) { count('rateLimit'); return !!options.limited; },
+    spotifyToken: function (cfg, body, callback) { count('token'); callback(null, 200, { access_token: 'access-token' }); },
     updateRefreshToken: function () {},
-    kvGet: function (key, callback) { callback(new Error('cache miss')); },
-    request: function (url, options, callback) { callback(null, 200, { segments: segments }); },
+    kvGet: function (key, callback) {
+      count('cache');
+      if (options.cached) callback(null, options.cached);
+      else callback(new Error('cache miss'));
+    },
+    request: function (url, requestOptions, callback) { count('upstream'); callback(null, 200, { segments: segments }); },
     kvSet: function (key, value, ttl, callback) { callback(null); }
   };
   Object.keys(replacements).forEach(function (key) {
@@ -21,7 +29,7 @@ function callWithSegments(segments) {
     lib[key] = replacements[key];
   });
 
-  var req = helpers.fakeReq('GET', '/api/spotify/audio-analysis?trackId=track');
+  var req = helpers.fakeReq('GET', '/api/spotify/audio-analysis?trackId=track', 'spotify_session=paired');
   req.query = { trackId: 'track' };
   var res = helpers.fakeRes();
   try {
@@ -62,4 +70,26 @@ test('large audio analysis responses are reduced below 20,000 bytes', function (
   assert.ok(payload.segments.length > 0);
   assert.strictEqual(payload.segments[payload.segments.length - 1].start, segments[segments.length - 1].start);
   assert.ok(Buffer.byteLength(JSON.stringify(payload), 'utf8') <= 20000);
+});
+
+test('analysis cache hits do not refresh Spotify tokens', function () {
+  var counters = {};
+  var cached = { segments: [{ start: 0, duration: 0.2, pitches: [1] }] };
+  var res = callWithSegments([], { cached: cached, counters: counters });
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(helpers.resBody(res), cached);
+  assert.strictEqual(counters.cache, 1);
+  assert.strictEqual(counters.token || 0, 0);
+  assert.strictEqual(counters.upstream || 0, 0);
+});
+
+test('analysis requests are rate limited before session, cache, and Spotify work', function () {
+  var counters = {};
+  var res = callWithSegments([], { limited: true, counters: counters });
+  assert.strictEqual(res.statusCode, 429);
+  assert.strictEqual(counters.rateLimit, 1);
+  assert.strictEqual(counters.session || 0, 0);
+  assert.strictEqual(counters.cache || 0, 0);
+  assert.strictEqual(counters.token || 0, 0);
+  assert.strictEqual(counters.upstream || 0, 0);
 });

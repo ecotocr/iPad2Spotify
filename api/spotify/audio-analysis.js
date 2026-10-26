@@ -146,19 +146,22 @@ function shrink(payload) {
 module.exports = function(req, res) {
   var trackId = req.query.trackId;
   if (!trackId) return lib.json(res, 400, { error: 'trackId required' });
+  if (!lib.cookie(req, 'spotify_session')) return lib.json(res, 401, { error: 'Pair this fullscreen app first.' });
+  if (lib.memoryRateLimit(req, 'audio-analysis', 20, 60)) {
+    return lib.json(res, 429, { error: 'Too many audio analysis requests. Try again shortly.' });
+  }
   lib.getSession(req, res, function(err, session) {
     if (err || !session) return lib.json(res, 401, { error: 'Pair this fullscreen app first.' });
-    var cfg = lib.config(req);
-
-    lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function(tokenErr, tokenStatus, token) {
-      if (tokenErr || tokenStatus !== 200 || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
-      lib.updateRefreshToken(res, session, token);
-      var cacheKey = 'analyze:' + crypto.createHash('md5').update('spotify-analysis-' + trackId).digest('hex');
-      lib.kvGet(cacheKey, function(cacheErr, cached) {
-        if (!cacheErr && cached) {
-          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-          return lib.json(res, 200, cached);
-        }
+    var cacheKey = 'analyze:' + crypto.createHash('md5').update('spotify-analysis-' + trackId).digest('hex');
+    lib.kvGet(cacheKey, function(cacheErr, cached) {
+      if (!cacheErr && cached) {
+        res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+        return lib.json(res, 200, cached);
+      }
+      var cfg = lib.config(req);
+      lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function(tokenErr, tokenStatus, token) {
+        if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
+        lib.updateRefreshToken(res, session, token);
         lib.request('https://api.spotify.com/v1/audio-analysis/' + trackId, { headers: { Authorization: 'Bearer ' + token.access_token } }, function(apiErr, status, data) {
           if (apiErr) return lib.json(res, 502, { error: 'Spotify Audio Analysis fetch failed.' });
           if (status !== 200) return lib.json(res, status, data || { error: 'Spotify request failed.' });

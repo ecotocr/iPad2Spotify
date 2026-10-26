@@ -254,12 +254,21 @@ test('audio analysis engine exposes getAudioAnalysisBands and syncs clock', () =
       { start: 2, duration: 2, loudness_max: -20, pitches: [0.2,0.3,0.5,0.6,0.7,0.8,0.9,0.95,0.98,0.99,0.99,0.99], timbre: [1,2,3,4,5,6,7,8,9,10,10,10] }
     ]
   });
+  fakeClock.setProgress(0);
+  const first = fakeWindow.getAudioAnalysisBands().frequencies;
   fakeClock.setProgress(1000);
   const bands = fakeWindow.getAudioAnalysisBands();
   assert.ok(bands);
   assert.strictEqual(bands.trackId, 'abc123');
   assert.strictEqual(bands.frequencies.length, 19);
   assert.ok(bands.frequencies.some((v) => v > 0), 'bands should not be all-zero with non-zero pitches');
+  fakeClock.setProgress(2000);
+  const second = fakeWindow.getAudioAnalysisBands().frequencies;
+  assert.ok(bands.frequencies[0] < first[0] && bands.frequencies[0] > second[0],
+    'spectrum blends neighboring segment values between their starts');
+  fakeClock.setProgress(4500);
+  assert.ok(fakeWindow.getAudioAnalysisBands().frequencies.every((v) => v === 0),
+    'spectrum is silent after the final segment ends');
   // Track id is carried through so winamp.js's guard (trackId === state.trackId)
   // can drop stale data; the engine itself just reflects the current track.
   fakeWindow.currentTrackId = 'def456';

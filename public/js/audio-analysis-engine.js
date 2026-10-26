@@ -206,8 +206,25 @@
     if (!seg) seg = self.segments[0];
     self.currentSegment = seg;
 
+    var lastSeg = self.segments[self.segments.length - 1];
+    if (seg === lastSeg && typeof lastSeg.duration === 'number' &&
+        nowSec >= lastSeg.start + lastSeg.duration) {
+      self.currentSegment = null;
+      return { loudness: 0, frequencies: empty, eqApplied: false };
+    }
+
     var freqBins = new Array(BIN_COUNT);
     segmentToBans(seg, freqBins);
+    var segIndex = self.segments.indexOf(seg);
+    var nextSeg = self.segments[segIndex + 1];
+    if (nextSeg && nextSeg.start > seg.start) {
+      var nextBins = new Array(BIN_COUNT);
+      segmentToBans(nextSeg, nextBins);
+      var blend = clamp((nowSec - seg.start) / (nextSeg.start - seg.start), 0, 1);
+      for (var j = 0; j < BIN_COUNT; j++) {
+        freqBins[j] += (nextBins[j] - freqBins[j]) * blend;
+      }
+    }
 
     // Apply EQ: per-bin band gain, then the preamp across all bins.
     var preamp = window.getEQGain ? window.getEQGain(PREAMP_INDEX) : 1.0;
