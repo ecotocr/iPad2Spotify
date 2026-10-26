@@ -125,12 +125,12 @@
       };
       var sendRequest = function () {
         var trackId = window.currentTrackId;
-        if (!trackId) { message('No track loaded'); return; }
         if (self.requestTrack !== trackId) {
           self.loadAnalysis(null);
           self.requestTrack = trackId;
         }
         self.requestGen += 1;
+        if (!trackId) { message('No track loaded'); return; }
         var gen = self.requestGen;
         var url = '/api/spotify/audio-analysis?trackId=' + encodeURIComponent(trackId);
         var xhr = new XMLHttpRequest();
