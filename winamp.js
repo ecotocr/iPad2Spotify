@@ -463,7 +463,7 @@
     var state = fromSpotify(null, Date.now()), profile = trackProfile(''), history = [];
     var active = false, loopHandle = null, loopIsFrame = false, frame = 0;
     var levels = new Array(VIS_BARS), peaks = new Array(VIS_BARS), milkLevels = new Array(MILK_BINS), wave = new Array(76);
-    var lastVisTime = 0, lastClockKey = '', lastMarquee = '', marqueeStart = 0, flash = null, milk = null, milkSize = '';
+    var lastVisTime = 0, lastClockKey = '', lastMarquee = '', marqueeStart = 0, flash = null, milk = null, milkSize = '', milkInitPending = false;
     var i;
     for (i = 0; i < VIS_BARS; i++) peaks[i] = 0;
 
@@ -590,6 +590,22 @@
       }
     }
 
+    function scheduleMilkInit() {
+      if (milk || milkInitPending || !win.OldMilk) return;
+      milkInitPending = true;
+      win.setTimeout(function () {
+        milkInitPending = false;
+        if (!active || !settings.open.md || milk) return;
+        try {
+          milk = win.OldMilk.createVisualizer(el.mdCanvas, { width: el.mdCanvas.width, height: el.mdCanvas.height });
+        } catch (e) {
+          milk = null;
+          if (win.console && typeof win.console.error === 'function') win.console.error('Milkdrop initialization failed:', e);
+        }
+        if (milk) milk.loadPreset(PRESET_NAMES[profile.preset]);
+      }, 0);
+    }
+
     // ---- per-frame rendering
     function renderClock(now) {
       var pos = positionMs(state, now), shown = settings.remaining ? state.durationMs - pos : pos;
@@ -647,13 +663,7 @@
       }
     }
     function renderMilk(tSec) {
-      if (!settings.open.md) return;
-      if (!milk && win.OldMilk) {
-        try { milk = win.OldMilk.createVisualizer(el.mdCanvas, { width: el.mdCanvas.width, height: el.mdCanvas.height }); }
-        catch (e) { milk = null; }
-        if (milk) milk.loadPreset(PRESET_NAMES[profile.preset]);
-      }
-      if (!milk) return;
+      if (!settings.open.md || !milk) return;
 
       var mb = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
       if (mb && mb.trackId === state.trackId && realBands(mb.frequencies, settings.eq, milkLevels)) {
@@ -840,6 +850,7 @@
         case 'toggle-pl': settings.open.pl = !settings.open.pl; save(); renderStatus(); layout(); renderPlaylist(); raise('pl'); break;
         case 'toggle-md':
           settings.open.md = !settings.open.md; save(); renderStatus(); layout(); raise('md');
+          if (settings.open.md) scheduleMilkInit();
           if (!settings.open.md && milk) milk.clear();
           break;
         case 'toggle-time': settings.remaining = !settings.remaining; lastClockKey = ''; save(); renderStatus(); renderClock(Date.now()); break;
@@ -1079,6 +1090,7 @@
         active = true;
         setClass(root, 'hidden', false);
         layout();
+        if (settings.open.md) scheduleMilkInit();
         lastClockKey = ''; lastMarquee = '';
         schedule();
       },

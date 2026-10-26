@@ -127,6 +127,8 @@ test('index.html wires Winamp mode without the removed winamp2-js port', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, /id="winamp-toggle"/);
   assert.match(html, /id="winamp"/);
+  assert.match(html, /name="mobile-web-app-capable" content="yes"/);
+  assert.match(html, /id="audio-analysis-status" class="message hidden" aria-live="polite"/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
   assert.doesNotMatch(html, /winamp2-js/);
@@ -153,6 +155,15 @@ test('OldMilk exposes host-driven rendering and no longer starts its own loop', 
   assert.match(src, /function render\(timeSec\)/);
   assert.doesNotMatch(src, /requestAnimationFrame/);
   assert.doesNotMatch(src, /__oldmilk/);
+});
+
+test('Milkdrop WebGL initialization is deferred outside the animation frame', () => {
+  const src = fs.readFileSync(path.join(root, 'winamp.js'), 'utf8');
+  const renderStart = src.indexOf('function renderMilk(tSec)');
+  const renderEnd = src.indexOf('// Single owner of all animation', renderStart);
+  assert.ok(renderStart >= 0 && renderEnd > renderStart);
+  assert.doesNotMatch(src.slice(renderStart, renderEnd), /createVisualizer/);
+  assert.match(src, /function scheduleMilkInit\(\) \{[\s\S]*?win\.setTimeout\(function \(\) \{[\s\S]*?createVisualizer/);
 });
 
 test('windows snap to each other and to the screen edges like Webamp', () => {

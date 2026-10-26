@@ -110,7 +110,9 @@
       var self = this;
       var message = function (text) {
         var el = document.getElementById ? document.getElementById('audio-analysis-status') : null;
-        if (el) el.innerHTML = text;
+        if (!el) return;
+        el.textContent = text;
+        el.className = text ? 'message' : 'message hidden';
       };
       var onAnalysisReceived = function (status, data, reqGen, reqTrack) {
         // Drop stale responses: only accept if this request still owns the track.
@@ -118,9 +120,13 @@
         if (self.requestGen !== reqGen) return;
         if (status === 200 && data && data.segments) {
           self.loadAnalysis(data);
-          message('Analysis loaded: ' + data.segments.length + ' segments');
+          message('');
         } else {
-          message('Analysis unavailable');
+          var detail = data && data.error;
+          if (detail && typeof detail === 'object') detail = detail.message;
+          if (typeof detail !== 'string' || !detail) detail = status ? 'HTTP ' + status : 'network error';
+          detail = detail.substring(0, 180);
+          message('Audio analysis unavailable (' + detail + '). Winamp is using its built-in visual fallback.');
         }
       };
       var sendRequest = function () {
@@ -130,7 +136,8 @@
           self.requestTrack = trackId;
         }
         self.requestGen += 1;
-        if (!trackId) { message('No track loaded'); return; }
+        message('');
+        if (!trackId) return;
         var gen = self.requestGen;
         var url = '/api/spotify/audio-analysis?trackId=' + encodeURIComponent(trackId);
         var xhr = new XMLHttpRequest();

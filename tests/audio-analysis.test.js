@@ -1,6 +1,9 @@
 'use strict';
 var test = require('node:test');
 var assert = require('node:assert');
+var fs = require('fs');
+var path = require('path');
+var vm = require('vm');
 var helpers = require('./helpers');
 var lib = require('../api/_lib');
 var audioAnalysis = require('../api/spotify/audio-analysis');
@@ -92,4 +95,33 @@ test('analysis requests are rate limited before session, cache, and Spotify work
   assert.strictEqual(counters.cache || 0, 0);
   assert.strictEqual(counters.token || 0, 0);
   assert.strictEqual(counters.upstream || 0, 0);
+});
+
+test('analysis 403 displays the provider reason and keeps the visual fallback available', function () {
+  var statusElement = { textContent: '', className: 'message hidden' };
+  var xhr;
+  function FakeXHR() { xhr = this; }
+  FakeXHR.prototype.open = function () {};
+  FakeXHR.prototype.send = function () {};
+
+  var appWindow = {};
+  var context = {
+    window: appWindow,
+    document: { getElementById: function (id) { return id === 'audio-analysis-status' ? statusElement : null; } },
+    XMLHttpRequest: FakeXHR,
+    performance: { now: function () { return 0; } }
+  };
+  var source = fs.readFileSync(path.join(__dirname, '../public/js/audio-analysis-engine.js'), 'utf8');
+  vm.runInNewContext(source, context);
+
+  appWindow.currentTrackId = 'track';
+  appWindow.requestAudioAnalysis();
+  xhr.status = 403;
+  xhr.readyState = 4;
+  xhr.responseText = JSON.stringify({ error: { message: 'Audio Analysis access is disabled for this app.' } });
+  xhr.onreadystatechange();
+
+  assert.strictEqual(statusElement.textContent, 'Audio analysis unavailable (Audio Analysis access is disabled for this app.). Winamp is using its built-in visual fallback.');
+  assert.strictEqual(statusElement.className, 'message');
+  assert.strictEqual(appWindow.getAudioAnalysisBands(), null);
 });
