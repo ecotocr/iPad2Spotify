@@ -14,24 +14,13 @@ function request(method,url,body,done){if(url.charAt(0)==='/')url=location.proto
   function schedulePoll(delay){if(timer)clearTimeout(timer);timer=setTimeout(poll,delay)}
   function pollDelay(data){var item=data&&data.item;if(!item)return 60000;if(!data.is_playing)return 60000;var duration=item.duration_ms||0,progress=data.progress_ms||0,remaining=duration-progress;if(remaining>0&&remaining<=60000)return Math.max(10000,Math.min(30000,remaining-3000));return 30000}
   function updateTimeline(){if(!current||!current.item){id('timeline-fill').style.width='0%';id('time-elapsed').innerHTML='0:00';id('time-duration').innerHTML='0:00';return}var duration=current.item.duration_ms||0,elapsed=current.progress_ms||0;if(current.is_playing)elapsed+=Date.now()-current.fetched_at;if(elapsed>duration)elapsed=duration;var pct=duration?Math.min(100,elapsed/duration*100):0;id('timeline-fill').style.width=pct+'%';id('time-elapsed').innerHTML=formatTime(elapsed);id('time-duration').innerHTML=formatTime(duration)}
-  // Winamp spectrum visualizer animation loop
-  var winampAnimFrameId = null;
+  // Signal the Winamp module (via the bridge) that live audio-analysis should
+  // drive the visualizer. The render loop itself is owned by winamp.js.
   function startWinampVisualizer() {
-    if (winampAnimFrameId || !window.updateVisualizer || !window.analyzeNow) return;
-    function updateWinampFrame() {
-      var analysis = window.analyzeNow();
-      if (analysis && analysis.frequencies) {
-        window.updateVisualizer(analysis);
-      }
-      winampAnimFrameId = requestAnimationFrame(updateWinampFrame);
-    }
-    winampAnimFrameId = requestAnimationFrame(updateWinampFrame);
+    if (window.winampVisStart) window.winampVisStart();
   }
   function stopWinampVisualizer() {
-    if (winampAnimFrameId) {
-      cancelAnimationFrame(winampAnimFrameId);
-      winampAnimFrameId = null;
-    }
+    if (window.winampVisStop) window.winampVisStop();
   }
 
   function setPlaying(isPlaying){id('play').className=isPlaying?'play icon-play is-playing':'play icon-play';if(isPlaying){startWinampVisualizer()}else{stopWinampVisualizer()}}

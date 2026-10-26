@@ -194,3 +194,93 @@ test('main menu offers Options, Set background and Exit; no separate exit button
   const vercel = fs.readFileSync(path.join(root, 'vercel.json'), 'utf8');
   assert.match(vercel, /img-src 'self' data:/);
 });
+
+// Visualizer bridge: engine exposes getAudioAnalysisBands; winamp.js prefers
+// those real bands over the deterministic pseudo-spectrum via realBands().
+test('audio analysis engine exposes getAudioAnalysisBands and syncs clock', () => {
+  // Evaluate the engine in an isolated scope with only the global we care about.
+  const engineSrc = fs.readFileSync(path.join(root, 'public/js/audio-analysis-engine.js'), 'utf8');
+  const engine = new Function(
+    'window',
+    engineSrc
+      .replace(/document\.getElementById/g, '(typeof document!=="undefined"&&document.getElementById)')
+      .replace(/performance\.now/g, '(()=>0)')
+      .replace(/requestAnimationFrame/g, '(f=>setTimeout(f,0))')
+      + '\nreturn window.audioAnalysis;'
+  );
+  const scope = {
+    audioAnalysis: null,
+    currentTrackId: null,
+    requestAudioAnalysis: null,
+    audioClock: null,
+    eqBands: null,
+    setEQGain: null,
+    getEQGain: null,
+    analyzeNow: null,
+    getAudioAnalysisBands: null
+  };
+  // The engine writes to window.*, so we pass our object as window.
+  const fakeWindow = Object.create(null);
+  engine(fakeWindow);
+  const ae = fakeWindow.audioAnalysis;
+  assert.ok(ae, 'engine self-initialises');
+  assert.strictEqual(typeof fakeWindow.analyzeNow, 'function');
+  assert.strictEqual(typeof fakeWindow.getAudioAnalysisBands, 'function');
+  // No segments loaded → null bands.
+  assert.strictEqual(fakeWindow.getAudioAnalysisBands(), null);
+  // Load segments and switch track: bands are available with current track id.
+  const fakeClock = {
+    isPlaying: false,
+    setProgress: function (ms) { this._ms = ms; },
+    getCurrentTime: function () { return this._ms || 0; },
+    pause: function () { this._paused = this._ms; this.isPlaying = false; },
+    resume: function () { this._ms = this._paused; this.isPlaying = true; },
+    setPausedAt: function (ms) { this._paused = ms; }
+  };
+  // Replace the module's internal clock with the test clock so we can drive it.
+  Object.defineProperty(fakeWindow, 'audioClock', { value: fakeClock, writable: true });
+  fakeClock.setProgress(0);
+  fakeClock.resume();
+  fakeWindow.currentTrackId = 'abc123';
+  ae.loadAnalysis({
+    segments: [
+      { start: 0, duration: 2, loudness_max: -12, pitches: [0.8,0.6,0.4,0.2,0.1,0.05,0.03,0.02,0.01,0.01,0.01,0.01], timbre: [10,8,6,4,2,1,0.5,0.3,0.2,0.1,0.1,0.1] },
+      { start: 2, duration: 2, loudness_max: -20, pitches: [0.2,0.3,0.5,0.6,0.7,0.8,0.9,0.95,0.98,0.99,0.99,0.99], timbre: [1,2,3,4,5,6,7,8,9,10,10,10] }
+    ]
+  });
+  fakeClock.setProgress(1000);
+  const bands = fakeWindow.getAudioAnalysisBands();
+  assert.ok(bands);
+  assert.strictEqual(bands.trackId, 'abc123');
+  assert.strictEqual(bands.frequencies.length, 19);
+  assert.ok(bands.frequencies.some((v) => v > 0), 'bands should not be all-zero with non-zero pitches');
+  // Track id is carried through so winamp.js's guard (trackId === state.trackId)
+  // can drop stale data; the engine itself just reflects the current track.
+  fakeWindow.currentTrackId = 'def456';
+  const mismatched = fakeWindow.getAudioAnalysisBands();
+  assert.strictEqual(mismatched.trackId, 'def456');
+});
+
+test('winamp.js realBands resamples and applies EQ, falls back when empty', () => {
+  const eq = { on: true, preamp: 50, bands: [50, 50, 50, 50, 50, 50, 50, 50, 50, 50] };
+  const out = new Array(19);
+  // Empty source → no override (renderer must fallback).
+  assert.strictEqual(W.realBands([], eq, out), false);
+  assert.strictEqual(W.realBands(null, eq, out), false);
+  // Valid 19-band source → filled output in [0,1] and returns true.
+  const src = new Array(19).fill(0);
+  src[0] = 0.5; src[9] = 0.25; src[18] = 0.1;
+  assert.strictEqual(W.realBands(src, eq, out), true);
+  assert.ok(out.every((v) => v >= 0 && v <= 1));
+  // EQ OFF bypass: yields a flat scale (eqGainDb returns 0 -> multiplier 1).
+  const off = { on: false, preamp: 50, bands: [50, 50, 50, 50, 50, 50, 50, 50, 50, 50] };
+  W.realBands(src, off, out);
+  assert.ok(out.every((v) => v >= 0 && v <= 1), 'EQ-off bins stay in [0,1]');
+  assert.ok(Math.max.apply(null, out) > 0, 'EQ-off still renders non-zero bins');
+  // A boost (bands above 50) scales up vs a cut; both stay bounded.
+  const boost = { on: true, preamp: 80, bands: [80, 80, 80, 80, 80, 80, 80, 80, 80, 80] };
+  const boosted = new Array(19);
+  W.realBands(src, boost, boosted);
+  assert.ok(Math.max.apply(null, boosted) > Math.max.apply(null, out), 'boost raises bins');
+  assert.ok(boosted.every((v) => v <= 1), 'boosted bins clamp at 1');
+});

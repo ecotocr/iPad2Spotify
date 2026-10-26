@@ -170,6 +170,24 @@
     }
     return out;
   }
+  // Resample a real (Spotify audio-analysis) band vector into out and apply the
+  // Winamp EQ weighting, so the analyzer/Milkdrop can show actual audio data.
+  // Returns true when real bands are used; false means the caller should fall
+  // back to the deterministic pseudo-spectrum. eqGainDb() yields 0 dB when the
+  // EQ is off, which is a no-op multiplier, so EQ OFF still bypasses correctly.
+  function realBands(src, eq, out) {
+    var n = out.length;
+    if (!src || !src.length) return false;
+    for (var i = 0; i < n; i++) {
+      var t = n > 1 ? i / (n - 1) : 0;
+      var s = t * (src.length - 1), si = Math.floor(s), frac = s - si;
+      var a = src[si] || 0, b = src[Math.min(si + 1, src.length - 1)] || 0;
+      var base = a + (b - a) * frac;
+      var f = n > 1 ? i / (n - 1) : 0;
+      out[i] = clamp(base * Math.pow(10, eqGainDb(eq, f) / 20), 0, 1);
+    }
+    return true;
+  }
   // Oscilloscope samples in [-1, 1], shaped by the same spectrum.
   function waveform(profile, tSec, levels, out) {
     var n = out.length, seed = profile.seed, lowAmp = (levels[0] + levels[1] + levels[2]) / 3;
@@ -604,7 +622,9 @@
       if (!visCtx || settings.vis === 'off') return;
       var dt = lastVisTime ? Math.min(0.1, (now - lastVisTime) / 1000) : 0;
       lastVisTime = now;
-      spectrum(profile, tSec, state.durationMs / 1000, settings.eq, levels);
+      var ab = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
+      var usedReal = !!(ab && ab.trackId === state.trackId && realBands(ab.frequencies, settings.eq, levels));
+      if (!usedReal) spectrum(profile, tSec, state.durationMs / 1000, settings.eq, levels);
       visCtx.drawImage(visBg, 0, 0);
       if (settings.vis === 'oscilloscope') {
         waveform(profile, tSec, levels, wave);
@@ -659,6 +679,12 @@
         }
       }
 
+      var mb = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
+      if (mb && mb.trackId === state.trackId && realBands(mb.frequencies, settings.eq, milkLevels)) {
+        milk.setBands(milkLevels);
+        milk.render(tSec);
+        return;
+      }
       // Fallback to deterministic pseudo-spectrum
       spectrum(profile, tSec, state.durationMs / 1000, settings.eq, milkLevels);
       milk.setBands(milkLevels);
@@ -1071,6 +1097,7 @@
     positionMs: positionMs,
     trackProfile: trackProfile,
     spectrum: spectrum,
+    realBands: realBands,
     waveform: waveform,
     eqGainDb: eqGainDb,
     sliderToDb: sliderToDb,

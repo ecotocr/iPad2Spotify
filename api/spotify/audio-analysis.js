@@ -71,6 +71,50 @@ function sanitizeAnalysis(data) {
   return safe;
 }
 
+// Progressively reduce an over-budget sanitized payload while always returning a
+// valid analysis object (never a warning). Shed the most redundant arrays first:
+// tatums/beats (duplicated by bars/sections timing), then timbre, then coarsen
+// the segment list. pitches + segments stay as long as possible (they drive the
+// spectrum), only dropping fields of later segments if still too large.
+function shrink(payload) {
+  var p = {
+    tatums: payload.tatums || [],
+    beats: payload.beats || [],
+    bars: payload.bars || [],
+    sections: payload.sections || [],
+    segments: payload.segments || []
+  };
+  var budget = 20000;
+  if (JSON.stringify(p).length <= budget) return p;
+
+  // 1) Drop tatums + beats (timing is already in bars/sections).
+  p.tatums = [];
+  p.beats = [];
+  if (JSON.stringify(p).length <= budget) return p;
+
+  // 2) Coarsen segments: keep every second one, then every fourth, etc.
+  var segments = p.segments;
+  for (var step = 2; step <= 16; step *= 2) {
+    var kept = [];
+    for (var i = 0; i < segments.length; i += step) kept.push(segments[i]);
+    p.segments = kept;
+    if (JSON.stringify(p).length <= budget) return p;
+  }
+
+  // 3) Keep only the smallest set of segment fields.
+  p.segments = segments.filter ? (function () {
+    var out = [];
+    for (var i = 0; i < segments.length; i += 16) {
+      var s = segments[i] || {};
+      out.push({ start: s.start, duration: s.duration, loudness_max: s.loudness_max, pitches: s.pitches || [] });
+    }
+    return out;
+  })() : [];
+  p.bars = [];
+  p.sections = [];
+  return p;
+}
+
 module.exports = function(req, res) {
   var trackId = req.query.trackId;
   if (!trackId) return lib.json(res, 400, { error: 'trackId required' });
@@ -83,16 +127,17 @@ module.exports = function(req, res) {
       lib.updateRefreshToken(res, session, token);
       var cacheKey = 'analyze:' + crypto.createHash('md5').update('spotify-analysis-' + trackId).digest('hex');
       lib.kvGet(cacheKey, function(cacheErr, cached) {
-        if (!cacheErr && cached) return lib.json(res, 200, cached);
+        if (!cacheErr && cached) {
+          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+          return lib.json(res, 200, cached);
+        }
         lib.request('https://api.spotify.com/v1/audio-analysis/' + trackId, { headers: { Authorization: 'Bearer ' + token.access_token } }, function(apiErr, status, data) {
           if (apiErr) return lib.json(res, 502, { error: 'Spotify Audio Analysis fetch failed.' });
           if (status !== 200) return lib.json(res, status, data || { error: 'Spotify request failed.' });
           var payload = sanitizeAnalysis(data);
-          var blob = JSON.stringify(payload);
-          // Truncate before caching if too large (single write, no warning race)
-          if (blob.length > 20000) {
-            payload = { warning: 'Payload truncated to fit LRU' };
-          }
+          // If the sanitized payload is too large, progressively shed redundant
+          // arrays so we always cache a *valid* (never a warning) payload.
+          if (JSON.stringify(payload).length > 20000) payload = shrink(payload, data);
           lib.kvSet(cacheKey, payload, 86400, function(saveErr) {
             if (saveErr) console.log('Analysis cache save failed:', saveErr.message);
             res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
