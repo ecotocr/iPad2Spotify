@@ -87,7 +87,7 @@ Open the [Vercel Dashboard](https://vercel.com/dashboard):
 3. Select **Import**.
 4. Use the repository root as the Root Directory.
 5. Choose **Other** as the Framework Preset, or leave automatic detection enabled.
-6. Leave Build Command, Install Command, and Output Directory empty.
+6. Leave Build Command and Install Command empty. The `vercel.json` setting keeps the repository root as the Output Directory.
 7. Select **Deploy**.
 
 Vercel automatically exposes files under `api/` as serverless functions. The project is a plain static frontend plus Vercel Functions and needs no build command.

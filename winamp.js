@@ -101,7 +101,8 @@
   // Normalises Spotify's currently-playing payload. "item: null" (HTTP 200 or 204) means stopped.
   function fromSpotify(data, now) {
     var item = data && data.item;
-    if (!item) return { status: 'stopped', trackId: null, title: '', artist: '', album: '', durationMs: 0, progressMs: 0, fetchedAt: now };
+    var fetchedAt = data && typeof data.fetched_at === 'number' && isFinite(data.fetched_at) ? data.fetched_at : now;
+    if (!item) return { status: 'stopped', trackId: null, title: '', artist: '', album: '', durationMs: 0, progressMs: 0, fetchedAt: fetchedAt };
     var artists = [];
     for (var i = 0; item.artists && i < item.artists.length; i++) artists.push(item.artists[i].name);
     var artist = artists.join(', ');
@@ -113,7 +114,7 @@
       album: (item.album && item.album.name) || '',
       durationMs: item.duration_ms || 0,
       progressMs: data.progress_ms || 0,
-      fetchedAt: now
+      fetchedAt: fetchedAt
     };
   }
   function positionMs(state, now) {
@@ -169,6 +170,24 @@
       out[i] = clamp(v, 0, 1);
     }
     return out;
+  }
+  // Resample a real (Spotify audio-analysis) band vector into out and apply the
+  // Winamp EQ weighting, so the analyzer/Milkdrop can show actual audio data.
+  // Returns true when real bands are used; false means the caller should fall
+  // back to the deterministic pseudo-spectrum. eqGainDb() yields 0 dB when the
+  // EQ is off, which is a no-op multiplier, so EQ OFF still bypasses correctly.
+  function realBands(src, eq, out) {
+    var n = out.length;
+    if (!src || !src.length) return false;
+    for (var i = 0; i < n; i++) {
+      var t = n > 1 ? i / (n - 1) : 0;
+      var s = t * (src.length - 1), si = Math.floor(s), frac = s - si;
+      var a = src[si] || 0, b = src[Math.min(si + 1, src.length - 1)] || 0;
+      var base = a + (b - a) * frac;
+      var f = n > 1 ? i / (n - 1) : 0;
+      out[i] = clamp(base * Math.pow(10, eqGainDb(eq, f) / 20), 0, 1);
+    }
+    return true;
   }
   // Oscilloscope samples in [-1, 1], shaped by the same spectrum.
   function waveform(profile, tSec, levels, out) {
@@ -604,7 +623,9 @@
       if (!visCtx || settings.vis === 'off') return;
       var dt = lastVisTime ? Math.min(0.1, (now - lastVisTime) / 1000) : 0;
       lastVisTime = now;
-      spectrum(profile, tSec, state.durationMs / 1000, settings.eq, levels);
+      var ab = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
+      var usedReal = !!(ab && ab.trackId === state.trackId && realBands(ab.frequencies, settings.eq, levels));
+      if (!usedReal) spectrum(profile, tSec, state.durationMs / 1000, settings.eq, levels);
       visCtx.drawImage(visBg, 0, 0);
       if (settings.vis === 'oscilloscope') {
         waveform(profile, tSec, levels, wave);
@@ -634,7 +655,14 @@
       }
       if (!milk) return;
 
-      // VisMap integration: use pre-calculated beat-locked bands if available
+      var mb = win.getAudioAnalysisBands ? win.getAudioAnalysisBands() : null;
+      if (mb && mb.trackId === state.trackId && realBands(mb.frequencies, settings.eq, milkLevels)) {
+        milk.setBands(milkLevels);
+        milk.render(tSec);
+        return;
+      }
+
+      // VisMap remains a fallback when Spotify analysis is unavailable.
       var progressMs = Math.round(tSec * 1000);
       if (currentVisMap && currentVisMap.type === 'bpm_grid' && currentVisMapTrackId === state.trackId) {
         var interval = currentVisMap.interval_ms;
@@ -1071,6 +1099,7 @@
     positionMs: positionMs,
     trackProfile: trackProfile,
     spectrum: spectrum,
+    realBands: realBands,
     waveform: waveform,
     eqGainDb: eqGainDb,
     sliderToDb: sliderToDb,
