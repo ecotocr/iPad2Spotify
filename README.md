@@ -202,6 +202,8 @@ After authorization, the callback page displays a pairing code. Open the same Ve
 
 You can complete the login on a phone or computer, then enter the resulting code on the iPad.
 
+For a Spotify app in **Development mode**, Spotify requires every account that uses the app to be added to its **Users Management** allowlist. An account may complete login but still receive HTTP 403 from Spotify until it is allowlisted. Add the account in the Spotify Developer Dashboard, then re-authorize it in iPad2Spotify. Spotify currently limits Development mode apps to five users and requires the app owner to have Premium.
+
 ## GitHub README last-played badge
 
 The player badge-creation button is currently hidden. Existing badge URLs continue to work. A badge URL is based on your Spotify account ID, so it is the same every time. The API displays Markdown similar to:

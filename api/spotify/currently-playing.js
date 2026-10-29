@@ -62,6 +62,11 @@ module.exports = function (req, res) {
       lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: { Authorization: 'Bearer ' + token.access_token } }, function (apiErr, status, data) {
         if (apiErr) return lib.json(res, 502, { error: 'Spotify request failed.' });
         if (status === 204) return lib.json(res, 200, { item: null, is_playing: false });
+        if (status === 403) {
+          return lib.json(res, 403, {
+            error: 'Spotify denied access for this account. If this app is in Development mode, add this account under Spotify Developer Dashboard → app Settings → Users Management, then authorize it again.'
+          });
+        }
         if (status !== 200) return lib.json(res, status, data || { error: 'Spotify request failed.' });
         lib.json(res, 200, data);
       });

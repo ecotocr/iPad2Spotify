@@ -41,6 +41,20 @@ test('a paired poll returns Spotify data without any Redis commands', function (
   });
 });
 
+test('a Spotify 403 explains the development-mode allowlist requirement', function () {
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) { cb(null, 403, null, ''); }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing', SESSION_COOKIE), res);
+  restore();
+  assert.strictEqual(res.statusCode, 403);
+  assert.match(helpers.resBody(res).error, /Development mode/);
+  assert.match(helpers.resBody(res).error, /Users Management/);
+});
+
 test('device lookup lists available devices without requiring a current playback response', function (t, done) {
   var urls = [];
   var restore = stubLib(withRedisFree({
