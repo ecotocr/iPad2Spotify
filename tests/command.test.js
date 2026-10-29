@@ -167,6 +167,32 @@ test('rejects an invalid Spotify device ID', function () {
   assert.match(helpers.resBody(res).error, /device id/i);
 });
 
+test('sets the selected Spotify device volume', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) { calledWith = { url: url, options: options }; cb(null, 204, null); }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'volume', volume_percent: 50, device_id: 'speaker-device-123' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/volume?volume_percent=50&device_id=speaker-device-123');
+    assert.strictEqual(calledWith.options.method, 'PUT');
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
+test('rejects invalid Spotify volume percentages', function () {
+  var restore = stubLib({ rateLimit: noKv });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'volume', volume_percent: 101 }), res);
+  restore();
+  assert.strictEqual(res.statusCode, 400);
+  assert.match(helpers.resBody(res).error, /volume/i);
+});
+
 test('starts artist radio with a valid artist id via context_uri', function (t, done) {
   var calledWith = null;
   var restore = stubLib({

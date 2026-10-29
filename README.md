@@ -241,6 +241,7 @@ The dashboard provides:
 - track title,
 - artist and album,
 - current playback state,
+- Spotify output-device volume control,
 - play/pause,
 - previous track,
 - next track,
@@ -260,6 +261,8 @@ The Previous control follows Spotify's usual timing behavior: at 3 seconds or ea
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
 
 The playback-devices icon lists devices Spotify currently reports as available. It marks the device from the current playback poll as **Playing now** and Spotify's separate active-device flag as **Active**. Select an available device to transfer playback there; restricted devices cannot be selected. Transferring starts playback on the selected device.
+
+The **Spotify volume** slider changes the selected output device's volume through Spotify. iOS Safari does not expose the iPad's hardware volume level or volume-button changes to web pages, so the app cannot automatically mirror the iPad's physical volume setting; use the in-app slider instead.
 
 Winamp Mode is not currently exposed in the player controls. Its renderer and implementation notes below are retained for maintainers.
 

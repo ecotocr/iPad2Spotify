@@ -29,9 +29,13 @@ module.exports = function (req, res) {
     var isPlaylist = body && body.action === 'play_playlist';
     var isSeek = body && body.action === 'seek';
     var isDeviceTransfer = body && body.action === 'transfer_device';
+    var isVolume = body && body.action === 'volume';
+    var volumeDeviceId = isVolume && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     var transferDeviceId = isDeviceTransfer && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     if (isSeek && (!Number.isInteger(body.position_ms) || body.position_ms < 0 || body.position_ms > 86400000)) return lib.json(res, 400, { error: 'Seek position must be a whole number between 0 and 86400000 milliseconds.' });
-    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylist && paths[body && body.action]);
+    if (isVolume && (typeof body.volume_percent !== 'number' || body.volume_percent % 1 !== 0 || body.volume_percent < 0 || body.volume_percent > 100)) return lib.json(res, 400, { error: 'Volume must be a whole number between 0 and 100 percent.' });
+    if (isVolume && body.device_id !== undefined && !volumeDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
+    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isVolume ? ['PUT', '/me/player/volume?volume_percent=' + body.volume_percent] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylist && paths[body && body.action]);
     var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylist ? idFrom(body, 'playlist_id') : null);
     if ((isArtist || isPlaylist) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
     if (isDeviceTransfer && !transferDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
@@ -52,6 +56,7 @@ module.exports = function (req, res) {
         });
       }
       if (isDeviceTransfer) sendCommand(null);
+      else if (isVolume && volumeDeviceId) sendCommand(volumeDeviceId);
       else findDeviceId(token.access_token, sendCommand);
     }); });
   });

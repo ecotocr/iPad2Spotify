@@ -134,12 +134,15 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(html, /id="disconnect-modal"/);
   assert.match(html, /id="minimalist-exit"/);
   assert.match(html, /id="devices"[^>]*aria-label="Spotify playback devices"/);
+  assert.match(html, /id="volume-slider"[^>]*type="range"/);
   assert.match(html, /id="devices-modal"/);
   assert.doesNotMatch(html, /No track is currently playing/);
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(css, /width:56px;height:56px/);
   assert.match(css, /position:absolute;top:50%;left:50%;display:block;width:26px;height:26px/);
   assert.match(css, /-webkit-transform:translate\(-50%,-50%\)/);
+  assert.match(css, /refresh-spin/);
+  assert.match(css, /\.connection-tools #status\{display:inline-block/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
   assert.doesNotMatch(html, /winamp2-js/);
