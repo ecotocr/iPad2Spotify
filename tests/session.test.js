@@ -122,6 +122,37 @@ test('Spotify profile lookup accepts Spotify profile-image CDN hosts only', func
   });
 });
 
+test('Spotify profile lookup retries the public profile endpoint when the current user endpoint omits images', function (t, done) {
+  var urls = [];
+  var restore = stubLib({
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url === 'https://api.spotify.com/v1/me') {
+        return cb(null, 200, { id: 'SpotifyUser', display_name: 'Spotify Name', images: [] });
+      }
+      assert.strictEqual(url, 'https://api.spotify.com/v1/users/SpotifyUser');
+      cb(null, 200, {
+        display_name: 'Public Spotify Name',
+        images: [{ url: 'https://profile-images.scdn.co/profile/avatar' }]
+      });
+    }
+  });
+  lib.spotifyUserProfile('access-token', function (err, profile) {
+    restore();
+    assert.ifError(err);
+    assert.deepStrictEqual(urls, [
+      'https://api.spotify.com/v1/me',
+      'https://api.spotify.com/v1/users/SpotifyUser'
+    ]);
+    assert.deepStrictEqual(profile, {
+      user_id: 'SpotifyUser',
+      display_name: 'Spotify Name',
+      avatar_url: 'https://profile-images.scdn.co/profile/avatar'
+    });
+    done();
+  });
+});
+
 test('Spotify profile lookup reports failures instead of silently returning no profile', function (t, done) {
   var restore = stubLib({
     request: function (url, options, cb) { cb(null, 403, { error: { status: 403, message: 'Insufficient client scope' } }); }

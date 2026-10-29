@@ -1,5 +1,47 @@
 var lib = require('../_lib');
 var URL = require('url').URL;
+function playlistIdFromContext(context) {
+  if (!context || typeof context.uri !== 'string') return null;
+  var match = context.uri.match(/^spotify:playlist:([A-Za-z0-9]{10,30})$/) ||
+    context.uri.match(/^spotify:user:[A-Za-z0-9._-]{1,64}:playlist:([A-Za-z0-9]{10,30})$/);
+  return match ? match[1] : null;
+}
+function loadCurrentQueue(accessToken, playback, res) {
+  lib.request('https://api.spotify.com/v1/me/player/queue', { headers: { Authorization: 'Bearer ' + accessToken } }, function (queueErr, queueStatus, queueData) {
+    if (queueErr) return lib.json(res, 502, { error: 'Could not load the current Spotify queue.' });
+    if (queueStatus !== 200 || !queueData) {
+      if (queueStatus === 403) return lib.json(res, 403, { error: 'Spotify denied access to the playback queue. Reauthorize this account to refresh its playback permissions.' });
+      return lib.json(res, queueStatus || 502, queueData || { error: 'Could not load the current Spotify queue.' });
+    }
+    var items = [];
+    function addTrack(track) {
+      if (!track || !track.uri) return;
+      var artists = Array.isArray(track.artists) ? track.artists.map(function (artist) {
+        return artist && typeof artist.name === 'string' ? artist.name.slice(0, 100) : '';
+      }).filter(Boolean) : [];
+      items.push({
+        position: items.length,
+        uri: typeof track.uri === 'string' ? track.uri : null,
+        name: typeof track.name === 'string' ? track.name.slice(0, 200) : 'Unavailable track',
+        artists: artists,
+        playable: track.type === 'track' && track.is_local !== true && typeof track.uri === 'string' && track.uri.indexOf('spotify:track:') === 0
+      });
+    }
+    var currentlyPlaying = queueData.currently_playing || (playback && playback.item);
+    addTrack(currentlyPlaying);
+    if (Array.isArray(queueData.queue)) {
+      for (var i = 0; i < queueData.queue.length; i++) addTrack(queueData.queue[i]);
+    }
+    lib.json(res, 200, {
+      source: 'queue',
+      playlist_id: null,
+      items: items,
+      total: items.length,
+      current_track_uri: currentlyPlaying && currentlyPlaying.uri || null,
+      next_offset: null
+    });
+  });
+}
 // Hot path: polled every 30-60 s by the paired app, so it must not touch Redis.
 module.exports = function (req, res) {
   if ((req.method || '').toUpperCase() !== 'GET') return lib.json(res, 405, { error: 'Expected GET but received ' + req.method + '.' });
@@ -68,13 +110,17 @@ module.exports = function (req, res) {
       }
       if (playlistRequested) {
         lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: { Authorization: 'Bearer ' + token.access_token } }, function (playbackErr, playbackStatus, playback) {
-          if (playbackErr) return lib.json(res, 502, { error: 'Could not identify the currently playing playlist.' });
-          if (playbackStatus !== 200 || !playback || !playback.context) {
-            return lib.json(res, 409, { error: 'Spotify is not currently playing from a playlist.' });
+          if (playbackErr) return lib.json(res, 502, { error: 'Could not identify the current Spotify playback context.' });
+          if (playbackStatus === 204) {
+            if (requestedPlaylistId) return lib.json(res, 409, { error: 'Spotify no longer reports the playlist that was open. Close and reopen the track list.' });
+            return loadCurrentQueue(token.access_token, null, res);
           }
-          var contextMatch = typeof playback.context.uri === 'string' && playback.context.uri.match(/^spotify:playlist:([A-Za-z0-9]{10,30})$/);
-          if (!contextMatch) return lib.json(res, 409, { error: 'The current playback is not from a Spotify playlist.' });
-          var playlistId = contextMatch[1];
+          if (playbackStatus !== 200 || !playback) return lib.json(res, playbackStatus || 502, playback || { error: 'Could not identify the current Spotify playback context.' });
+          var playlistId = playlistIdFromContext(playback.context);
+          if (!playlistId) {
+            if (requestedPlaylistId) return lib.json(res, 409, { error: 'Spotify no longer reports the playlist that was open. Close and reopen the track list.' });
+            return loadCurrentQueue(token.access_token, playback, res);
+          }
           if (requestedPlaylistId && requestedPlaylistId !== playlistId) {
             return lib.json(res, 409, { error: 'Playback has moved to a different playlist. Refresh the track list.' });
           }

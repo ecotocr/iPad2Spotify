@@ -93,7 +93,7 @@ function setProfileStore(res, storeId, secure) {
 function profileKey(storeId) { return 'profiles:' + storeId; }
 function createProfileId(userId) { return badgeId(userId) || random(18); }
 function isSpotifyImageUrl(value) {
-  return typeof value === 'string' && /^https:\/\/(?:i\.scdn\.co|image-cdn(?:-[a-z0-9]+)?\.spotifycdn\.com)\//i.test(value);
+  return typeof value === 'string' && /^https:\/\/(?:(?:[a-z0-9-]+\.)*scdn\.co|(?:[a-z0-9-]+\.)*spotifycdn\.com)\//i.test(value);
 }
 function publicProfile(profile) {
   return {
@@ -212,19 +212,27 @@ function spotifyUserProfile(accessToken, callback) {
   module.exports.request('https://api.spotify.com/v1/me', { headers: { Authorization: 'Bearer ' + accessToken }, timeout: 10000 }, function (err, status, data) {
     if (err) return callback(err, null);
     if (status !== 200 || !data || !badgeId(data.id)) return callback(new Error('Spotify profile request returned HTTP ' + status + '.'), null);
-    var avatar = null;
-    if (Array.isArray(data.images)) {
-      for (var i = 0; i < data.images.length; i++) {
-        if (data.images[i] && isSpotifyImageUrl(data.images[i].url)) {
-          avatar = data.images[i].url;
-          break;
-        }
+    function findAvatar(profile) {
+      if (!profile || !Array.isArray(profile.images)) return null;
+      for (var i = 0; i < profile.images.length; i++) {
+        if (profile.images[i] && isSpotifyImageUrl(profile.images[i].url)) return profile.images[i].url;
       }
+      return null;
     }
-    callback(null, {
-      user_id: data.id,
-      display_name: typeof data.display_name === 'string' && data.display_name.trim() ? data.display_name.trim().slice(0, 100) : null,
-      avatar_url: avatar
+    function finish(details) {
+      callback(null, {
+        user_id: data.id,
+        display_name: typeof data.display_name === 'string' && data.display_name.trim() ? data.display_name.trim().slice(0, 100) :
+          details && typeof details.display_name === 'string' && details.display_name.trim() ? details.display_name.trim().slice(0, 100) : null,
+        avatar_url: findAvatar(data) || findAvatar(details)
+      });
+    }
+    if (findAvatar(data)) return finish(null);
+    module.exports.request('https://api.spotify.com/v1/users/' + encodeURIComponent(data.id), {
+      headers: { Authorization: 'Bearer ' + accessToken },
+      timeout: 10000
+    }, function (detailsErr, detailsStatus, details) {
+      finish(!detailsErr && detailsStatus === 200 ? details : null);
     });
   });
 }

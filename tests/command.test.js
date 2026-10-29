@@ -101,6 +101,40 @@ test('starts a selected track at its position inside the playlist context', func
   });
 });
 
+test('plays a selected Spotify queue track by URI', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) {
+      if (url.indexOf('/me/player/devices') !== -1) return cb(null, 200, { devices: [{ id: 'device-1', is_active: true }] });
+      calledWith = { url: url, options: options };
+      cb(null, 204, null);
+    }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_track', track_uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK'
+  }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/play?device_id=device-1');
+    assert.deepStrictEqual(JSON.parse(calledWith.options.body), { uris: ['spotify:track:4NHQUGzhtTLFvgF5SZesLK'] });
+    done();
+  });
+});
+
+test('rejects invalid Spotify queue track URIs', function () {
+  var restore = stubLib({ rateLimit: noKv });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_track', track_uri: 'https://example.test/track'
+  }), res);
+  restore();
+  assert.strictEqual(res.statusCode, 400);
+  assert.match(helpers.resBody(res).error, /track/i);
+});
+
 test('rejects invalid selected playlist track positions', function (t, done) {
   var restore = stubLib({ rateLimit: noKv, kvGet: noKv, spotifyToken: validToken });
   var res = helpers.fakeRes();

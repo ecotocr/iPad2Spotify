@@ -126,6 +126,66 @@ test('current playlist request lists sanitized tracks with stable playlist offse
   });
 });
 
+test('current playlist lookup accepts Spotify legacy user playlist URIs', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) {
+        return cb(null, 200, { context: { uri: 'spotify:user:esteban:playlist:37i9dQZF1DX4JAvHpjipBk' }, item: {} });
+      }
+      cb(null, 200, { total: 0, items: [] });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(helpers.resBody(res).playlist_id, '37i9dQZF1DX4JAvHpjipBk');
+    assert.ok(urls[1].indexOf('/playlists/37i9dQZF1DX4JAvHpjipBk/items') !== -1);
+    done();
+  });
+});
+
+test('playlist button falls back to the current Spotify queue when playback has no playlist context', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) {
+        return cb(null, 200, { context: null, item: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] } });
+      }
+      if (url.indexOf('/me/player/queue') !== -1) {
+        return cb(null, 200, {
+          currently_playing: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] },
+          queue: [{ type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLM', name: 'Next Song', artists: [{ name: 'Other' }] }]
+        });
+      }
+      throw new Error('Queue fallback must not request playlist items.');
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    var body = helpers.resBody(res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.source, 'queue');
+    assert.strictEqual(body.total, 2);
+    assert.strictEqual(body.items[0].name, 'Current Song');
+    assert.strictEqual(body.items[1].position, 1);
+    assert.strictEqual(body.items[1].playable, true);
+    assert.strictEqual(body.current_track_uri, 'spotify:track:4NHQUGzhtTLFvgF5SZesLK');
+    assert.ok(urls[1].indexOf('/me/player/queue') !== -1);
+    done();
+  });
+});
+
 test('playlist lookup refuses a playlist different from the active playback context', function (t, done) {
   var playlistRequests = 0;
   var restore = stubLib(withRedisFree({

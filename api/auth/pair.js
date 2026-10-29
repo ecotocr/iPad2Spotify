@@ -1,7 +1,9 @@
 var lib = require('../_lib');
+var PROFILE_METADATA_VERSION = 5;
 function refreshProfileMetadata(req, profiles, session, callback) {
   var pending = profiles.filter(function (profile) {
-    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 4;
+    return profile && typeof profile.refresh_token === 'string' &&
+      (profile.profile_metadata_version !== PROFILE_METADATA_VERSION || !profile.avatar_url);
   });
   var changed = false, sessionChanged = false, sessionTokenChanged = false, warningCount = 0, index = 0, cfg = lib.config(req);
   function next() {
@@ -27,16 +29,22 @@ function refreshProfileMetadata(req, profiles, session, callback) {
           warningCount++;
           return next();
         }
+        var displayName = details.display_name || profile.display_name;
+        if (!details.display_name && (profile.display_name === profile.user_id || profile.display_name === details.user_id)) displayName = null;
+        var avatarUrl = details.avatar_url || null;
+        var metadataChanged = profile.user_id !== details.user_id ||
+          profile.display_name !== displayName ||
+          profile.avatar_url !== avatarUrl ||
+          profile.profile_metadata_version !== PROFILE_METADATA_VERSION;
         profile.user_id = details.user_id;
-        if (details.display_name) profile.display_name = details.display_name;
-        else if (profile.display_name === profile.user_id || profile.display_name === details.user_id) profile.display_name = null;
-        profile.avatar_url = details.avatar_url || null;
+        profile.display_name = displayName;
+        profile.avatar_url = avatarUrl;
         if (session && session.profile_id === profile.id) {
           session.user_id = details.user_id;
           sessionChanged = true;
         }
-        profile.profile_metadata_version = 4;
-        changed = true;
+        profile.profile_metadata_version = PROFILE_METADATA_VERSION;
+        if (metadataChanged) changed = true;
         next();
       });
     });
