@@ -6,6 +6,59 @@ function playlistIdFromContext(context) {
     context.uri.match(/^spotify:user:[A-Za-z0-9._-]{1,64}:playlist:([A-Za-z0-9]{10,30})$/);
   return match ? match[1] : null;
 }
+function trackDetails(track, position, playable) {
+  if (!track || !track.uri) return null;
+  var artists = Array.isArray(track.artists) ? track.artists.map(function (artist) {
+    return artist && typeof artist.name === 'string' ? artist.name.slice(0, 100) : '';
+  }).filter(Boolean) : [];
+  var album = track.album || {};
+  var images = Array.isArray(album.images) ? album.images.filter(function (image) {
+    return image && lib.isSpotifyImageUrl(image.url);
+  }).map(function (image) {
+    return { url: image.url };
+  }) : [];
+  return {
+    position: position,
+    id: typeof track.id === 'string' ? track.id : track.uri.split(':').pop(),
+    uri: track.uri,
+    name: typeof track.name === 'string' ? track.name.slice(0, 200) : 'Unavailable track',
+    artists: artists,
+    album_name: typeof album.name === 'string' ? album.name.slice(0, 200) : '',
+    album_images: images,
+    duration_ms: Number.isInteger(track.duration_ms) ? track.duration_ms : 0,
+    playable: !!playable && track.type === 'track' && track.is_local !== true && track.uri.indexOf('spotify:track:') === 0
+  };
+}
+function loadPlaylist(accessToken, playback, playlistId, requestedPlaylistId, playlistOffset, res) {
+  if (requestedPlaylistId && requestedPlaylistId !== playlistId) {
+    return lib.json(res, 409, { error: 'Playback has moved to a different playlist. Refresh the track list.' });
+  }
+  var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/items?limit=50&offset=' + playlistOffset;
+  lib.request(playlistUrl, { headers: { Authorization: 'Bearer ' + accessToken } }, function (playlistErr, playlistStatus, playlistData) {
+    if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
+    if (playlistStatus === 403) {
+      return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
+    }
+    if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
+      return lib.json(res, playlistStatus || 502, playlistData || { error: 'Spotify could not load the current playlist tracks.' });
+    }
+    var items = playlistData.items.map(function (entry, index) {
+      var track = entry && (entry.item || entry.track);
+      return trackDetails(track, playlistOffset + index, !!entry && !entry.is_local);
+    }).filter(Boolean);
+    var total = Number.isInteger(playlistData.total) ? playlistData.total : playlistOffset + items.length;
+    var nextOffset = playlistOffset + playlistData.items.length;
+    lib.json(res, 200, {
+      source: 'playlist',
+      playlist_id: playlistId,
+      items: items,
+      total: total,
+      current_track_uri: playback.item && playback.item.uri || null,
+      device_id: playback.device && playback.device.id || null,
+      next_offset: nextOffset < total ? nextOffset : null
+    });
+  });
+}
 function loadCurrentQueue(accessToken, playback, res) {
   lib.request('https://api.spotify.com/v1/me/player/queue', { headers: { Authorization: 'Bearer ' + accessToken } }, function (queueErr, queueStatus, queueData) {
     if (queueErr) return lib.json(res, 502, { error: 'Could not load the current Spotify queue.' });
@@ -15,17 +68,8 @@ function loadCurrentQueue(accessToken, playback, res) {
     }
     var items = [];
     function addTrack(track) {
-      if (!track || !track.uri) return;
-      var artists = Array.isArray(track.artists) ? track.artists.map(function (artist) {
-        return artist && typeof artist.name === 'string' ? artist.name.slice(0, 100) : '';
-      }).filter(Boolean) : [];
-      items.push({
-        position: items.length,
-        uri: typeof track.uri === 'string' ? track.uri : null,
-        name: typeof track.name === 'string' ? track.name.slice(0, 200) : 'Unavailable track',
-        artists: artists,
-        playable: track.type === 'track' && track.is_local !== true && typeof track.uri === 'string' && track.uri.indexOf('spotify:track:') === 0
-      });
+      var details = trackDetails(track, items.length, true);
+      if (details) items.push(details);
     }
     var currentlyPlaying = queueData.currently_playing || (playback && playback.item);
     addTrack(currentlyPlaying);
@@ -38,6 +82,7 @@ function loadCurrentQueue(accessToken, playback, res) {
       items: items,
       total: items.length,
       current_track_uri: currentlyPlaying && currentlyPlaying.uri || null,
+      device_id: playback && playback.device && playback.device.id || null,
       next_offset: null
     });
   });
@@ -117,45 +162,13 @@ module.exports = function (req, res) {
           }
           if (playbackStatus !== 200 || !playback) return lib.json(res, playbackStatus || 502, playback || { error: 'Could not identify the current Spotify playback context.' });
           var playlistId = playlistIdFromContext(playback.context);
-          if (!playlistId) {
-            if (requestedPlaylistId) return lib.json(res, 409, { error: 'Spotify no longer reports the playlist that was open. Close and reopen the track list.' });
-            return loadCurrentQueue(token.access_token, playback, res);
-          }
-          if (requestedPlaylistId && requestedPlaylistId !== playlistId) {
-            return lib.json(res, 409, { error: 'Playback has moved to a different playlist. Refresh the track list.' });
-          }
-          var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/items?limit=50&offset=' + playlistOffset;
-          lib.request(playlistUrl, { headers: { Authorization: 'Bearer ' + token.access_token } }, function (playlistErr, playlistStatus, playlistData) {
-            if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
-            if (playlistStatus === 403) {
-              return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
-            }
-            if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
-              return lib.json(res, playlistStatus || 502, { error: 'Spotify could not load the current playlist tracks.' });
-            }
-            var items = playlistData.items.map(function (entry, index) {
-              var track = entry && (entry.item || entry.track);
-              if (!track) return null;
-              var artists = Array.isArray(track.artists) ? track.artists.map(function (artist) {
-                return artist && typeof artist.name === 'string' ? artist.name.slice(0, 100) : '';
-              }).filter(Boolean) : [];
-              return {
-                position: playlistOffset + index,
-                uri: typeof track.uri === 'string' ? track.uri : null,
-                name: typeof track.name === 'string' ? track.name.slice(0, 200) : 'Unavailable track',
-                artists: artists,
-                playable: !entry.is_local && track.is_local !== true && track.type === 'track' && typeof track.uri === 'string' && track.uri.indexOf('spotify:track:') === 0
-              };
-            }).filter(Boolean);
-            var total = Number.isInteger(playlistData.total) ? playlistData.total : playlistOffset + items.length;
-            var nextOffset = playlistOffset + playlistData.items.length;
-            lib.json(res, 200, {
-              playlist_id: playlistId,
-              items: items,
-              total: total,
-              current_track_uri: playback.item && playback.item.uri || null,
-              next_offset: nextOffset < total ? nextOffset : null
-            });
+          if (playlistId) return loadPlaylist(token.access_token, playback, playlistId, requestedPlaylistId, playlistOffset, res);
+          if (requestedPlaylistId) return lib.json(res, 409, { error: 'Spotify no longer reports the playlist that was open. Close and reopen the track list.' });
+          lib.request('https://api.spotify.com/v1/me/player', { headers: { Authorization: 'Bearer ' + token.access_token } }, function (stateErr, stateStatus, state) {
+            if (stateErr) return lib.json(res, 502, { error: 'Could not identify the current Spotify playback context.' });
+            var statePlaylistId = stateStatus === 200 && state ? playlistIdFromContext(state.context) : null;
+            if (statePlaylistId) return loadPlaylist(token.access_token, state, statePlaylistId, null, playlistOffset, res);
+            loadCurrentQueue(token.access_token, playback, res);
           });
         });
         return;

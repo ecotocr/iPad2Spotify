@@ -36,10 +36,12 @@ module.exports = function (req, res) {
     var isVolume = body && body.action === 'volume';
     var volumeDeviceId = isVolume && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     var transferDeviceId = isDeviceTransfer && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
+    var requestedDeviceId = body && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     var playlistPosition = isPlaylistTrack && Number.isInteger(body.position) && body.position >= 0 && body.position <= 100000 ? body.position : null;
     if (isSeek && (!Number.isInteger(body.position_ms) || body.position_ms < 0 || body.position_ms > 86400000)) return lib.json(res, 400, { error: 'Seek position must be a whole number between 0 and 86400000 milliseconds.' });
     if (isVolume && (typeof body.volume_percent !== 'number' || body.volume_percent % 1 !== 0 || body.volume_percent < 0 || body.volume_percent > 100)) return lib.json(res, 400, { error: 'Volume must be a whole number between 0 and 100 percent.' });
     if (isVolume && body.device_id !== undefined && !volumeDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
+    if (body && body.device_id !== undefined && !requestedDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
     var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isVolume ? ['PUT', '/me/player/volume?volume_percent=' + body.volume_percent] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylistContext && paths[body && body.action]);
     var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylistContext ? idFrom(body, 'playlist_id') : null);
     if ((isArtist || isPlaylistContext) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
@@ -59,7 +61,7 @@ module.exports = function (req, res) {
         if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); } else { headers['Content-Length'] = 0; }
         lib.request('https://api.spotify.com/v1' + path, { method: method, headers: headers, body: payload }, function (apiErr, status, data) {
           if (apiErr) return lib.json(res, 502, { error: 'Spotify request failed.' });
-          if (status === 200 || status === 204) return lib.json(res, 200, {});
+          if (status === 200 || status === 204) return lib.json(res, 200, { device_id: deviceId || null });
           var spotifyError = data && data.error;
           var errorText = typeof spotifyError === 'string' ? spotifyError : spotifyError && (spotifyError.message || spotifyError.reason);
           if (isVolume && typeof errorText === 'string' && /cannot control device volume/i.test(errorText)) {
@@ -69,7 +71,7 @@ module.exports = function (req, res) {
         });
       }
       if (isDeviceTransfer) sendCommand(null);
-      else if (isVolume && volumeDeviceId) sendCommand(volumeDeviceId);
+      else if (requestedDeviceId) sendCommand(requestedDeviceId);
       else findDeviceId(token.access_token, sendCommand);
       });
     }); });

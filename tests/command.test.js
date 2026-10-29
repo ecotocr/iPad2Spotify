@@ -124,6 +124,33 @@ test('plays a selected Spotify queue track by URI', function (t, done) {
   });
 });
 
+test('targets the requested Spotify device and returns its ID after starting a track', function (t, done) {
+  var calledWith = null, deviceLookups = 0;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) {
+      if (url.indexOf('/me/player/devices') !== -1) {
+        deviceLookups++;
+        return cb(null, 200, { devices: [] });
+      }
+      calledWith = { url: url, options: options };
+      cb(null, 204, null);
+    }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_track', track_uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', device_id: 'chosen-device'
+  }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(deviceLookups, 0);
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/play?device_id=chosen-device');
+    assert.strictEqual(helpers.resBody(res).device_id, 'chosen-device');
+    done();
+  });
+});
+
 test('rejects invalid Spotify queue track URIs', function () {
   var restore = stubLib({ rateLimit: noKv });
   var res = helpers.fakeRes();

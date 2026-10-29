@@ -172,6 +172,8 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.doesNotMatch(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /Spotify returned no profile photo|profile photo URL, but it could not be downloaded/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /data\.source==='queue'\?'Current queue':'Current playlist'/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /action:'play_track',track_uri:uri/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /optimisticPlaybackUntil=Date\.now\(\)\+15000/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /data\.device_id\)playbackDeviceId=data\.device_id/);
   assert.match(css, /\.playlist-close\{position:absolute/);
   assert.match(css, /\.playlist-list\{max-height:55vh;overflow-y:auto/);
   assert.match(css, /\.icon-prev:before\{[^}]*translate\(8px,-50%\)/);

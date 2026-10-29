@@ -160,6 +160,7 @@ test('playlist button falls back to the current Spotify queue when playback has 
       if (url.indexOf('/currently-playing') !== -1) {
         return cb(null, 200, { context: null, item: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] } });
       }
+      if (url === 'https://api.spotify.com/v1/me/player') return cb(null, 204, null);
       if (url.indexOf('/me/player/queue') !== -1) {
         return cb(null, 200, {
           currently_playing: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] },
@@ -181,7 +182,46 @@ test('playlist button falls back to the current Spotify queue when playback has 
     assert.strictEqual(body.items[1].position, 1);
     assert.strictEqual(body.items[1].playable, true);
     assert.strictEqual(body.current_track_uri, 'spotify:track:4NHQUGzhtTLFvgF5SZesLK');
-    assert.ok(urls[1].indexOf('/me/player/queue') !== -1);
+    assert.ok(urls[1].indexOf('/me/player') !== -1);
+    assert.ok(urls[2].indexOf('/me/player/queue') !== -1);
+    done();
+  });
+});
+
+test('playlist lookup checks the full playback state for a playlist context', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) return cb(null, 200, { item: { uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK' } });
+      if (url === 'https://api.spotify.com/v1/me/player') {
+        return cb(null, 200, {
+          context: { uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk' },
+          device: { id: 'device-1' },
+          item: { uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK' }
+        });
+      }
+      cb(null, 200, { total: 1, items: [{ item: {
+        type: 'track', id: '4NHQUGzhtTLFvgF5SZesLK', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK',
+        name: 'Song', artists: [{ name: 'Artist' }], duration_ms: 123000,
+        album: { name: 'Album', images: [{ url: 'https://i.scdn.co/image/album' }] }
+      } }] });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    var body = helpers.resBody(res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.source, 'playlist');
+    assert.strictEqual(body.device_id, 'device-1');
+    assert.strictEqual(body.items[0].id, '4NHQUGzhtTLFvgF5SZesLK');
+    assert.strictEqual(body.items[0].duration_ms, 123000);
+    assert.deepStrictEqual(body.items[0].album_images, [{ url: 'https://i.scdn.co/image/album' }]);
+    assert.ok(urls.indexOf('https://api.spotify.com/v1/me/player') !== -1);
     done();
   });
 });
