@@ -69,7 +69,7 @@ body:not(.minimalist) #player.lyrics-visible #art-frame{width:46vw;max-width:500
 .disconnect-button:active{color:#f5f1e8;background:#344238}
 .minimalist-exit{display:none;position:fixed;top:16px;right:16px;z-index:4;width:34px;height:34px;padding:0;border:1px solid #3b413e;border-radius:50%;background:rgba(50,55,52,.78);color:#afb5b1;font-size:25px;line-height:30px;cursor:pointer}
 body.minimalist .minimalist-exit{display:block}
-body.minimalist .disconnect-button{display:none!important}
+body.minimalist .player-account-actions{display:none!important}
 body.minimalist .player.lyrics-visible .art{width:94vw;height:76vh;max-width:1120px;max-height:calc(100vh - 48px);margin:0 auto}
 body.minimalist .player.lyrics-visible .lyrics-panel{padding:28px 34px}
 body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-weight:bold;line-height:1.55}
@@ -93,7 +93,7 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .profile-list{display:-webkit-flex;display:flex;-webkit-justify-content:center;justify-content:center;-webkit-flex-wrap:wrap;flex-wrap:wrap;margin:72px auto 0}
 .profile-card{display:inline-block;width:148px;margin:0 15px;padding:0;border:0;background:transparent;color:#a7b0a5;text-align:center;cursor:pointer}
 .profile-avatar,.profile-add-icon{position:relative;display:block;width:148px;height:148px;margin:0 auto 15px;overflow:hidden;border-radius:50%;background:#303136}
-.profile-avatar img{position:absolute;top:0;left:0;display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.profile-avatar img{position:absolute;top:0;left:0;display:block;width:100%;height:100%;border-radius:50%}
 .profile-avatar-fallback{position:absolute;top:0;left:0;display:block;width:100%;height:100%;padding-top:48px;color:#dfe4db;font-size:44px;text-align:center}
 .profile-name{display:block;max-width:180px;margin:0 auto;font-size:18px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-card:active .profile-avatar,.profile-card:focus .profile-avatar{outline:3px solid #f5f1e8;outline-offset:3px}
@@ -104,8 +104,9 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .profile-cancel{display:block;width:100%;margin-top:8px;padding:10px;border:0;background:transparent;color:#a7b0a5;font-size:12px;cursor:pointer}
 .profile-cancel:active{color:#f5f1e8}
 @media(max-width:600px){.profile-picker{position:relative;top:auto;left:auto;width:100%;padding:32px 8px;transform:none;margin:34px auto}.profile-picker h2{font-size:32px}.profile-list{margin-top:44px}.profile-card{width:112px;margin:0 10px 24px}.profile-avatar,.profile-add-icon{width:104px;height:104px;margin-bottom:10px}.profile-avatar-fallback{padding-top:32px;font-size:36px}.profile-add-icon{padding-top:12px;font-size:64px}.profile-name{font-size:15px}.profile-add .profile-name{font-size:14px}}
-.profile-entry{display:inline-block;width:178px;margin:0 8px 18px;vertical-align:top}
-.profile-entry .profile-card{display:block;width:100%;margin:0}
-.profile-remove{display:block;margin:7px auto 0;padding:7px 16px;border:1px solid #39443c;border-radius:3px;background:#1b231f;color:#899389;font-size:12px;cursor:pointer}
-.profile-remove:active,.profile-remove:focus{border-color:#697665;color:#f5f1e8}
-@media(max-width:600px){.profile-entry{width:112px;margin:0 10px 20px}.profile-entry .profile-card{width:100%}.profile-remove{padding:7px 12px}}
+.player-account-actions{display:none;position:fixed;right:24px;bottom:18px;z-index:3;text-align:right;white-space:nowrap}
+.player:not(.hidden)~.player-account-actions{display:block}
+.player-account-actions .disconnect-button,.player-account-actions .remove-profile-button{display:inline-block;position:static;vertical-align:middle}
+.player-account-actions .remove-profile-button{margin-left:8px;padding:9px 13px;border:1px solid #39443c;border-radius:3px;background:#252b28;color:#929b92;font-size:11px;cursor:pointer}
+.player-account-actions .remove-profile-button:active{color:#f5f1e8;background:#344238}
+@media(max-width:600px){.player:not(.hidden)~.player-account-actions{right:12px;bottom:12px}}

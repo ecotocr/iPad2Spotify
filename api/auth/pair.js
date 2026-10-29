@@ -1,7 +1,7 @@
 var lib = require('../_lib');
 function refreshProfileMetadata(req, profiles, session, callback) {
   var pending = profiles.filter(function (profile) {
-    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 2;
+    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 3;
   });
   var changed = false, sessionChanged = false, sessionTokenChanged = false, warningCount = 0, index = 0, cfg = lib.config(req);
   function next() {
@@ -35,7 +35,7 @@ function refreshProfileMetadata(req, profiles, session, callback) {
           session.user_id = details.user_id;
           sessionChanged = true;
         }
-        profile.profile_metadata_version = 2;
+        profile.profile_metadata_version = 3;
         changed = true;
         next();
       });
@@ -165,6 +165,40 @@ function removeProfile(req, res, body) {
     });
   });
 }
+function serveProfileAvatar(req, res) {
+  if (lib.memoryRateLimit(req, 'profile-avatar', 60, 60)) return lib.json(res, 429, { error: 'Too many profile image requests. Try again shortly.' });
+  var query = req.query || {};
+  var id = query && typeof query.avatar === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(query.avatar) ? query.avatar : null;
+  if (!id) return lib.json(res, 400, { error: 'Choose a valid Spotify profile image.' });
+  var storeId = lib.profileStoreId(req);
+  if (!storeId) return lib.json(res, 401, { error: 'No profiles are saved on this installation.' });
+  lib.getProfileStore(storeId, function (profileErr, profiles) {
+    if (profileErr) return lib.json(res, 503, { error: 'Could not load saved Spotify profiles.' });
+    var profile = null;
+    for (var i = 0; i < profiles.length; i++) {
+      if (profiles[i] && profiles[i].id === id) {
+        profile = profiles[i];
+        break;
+      }
+    }
+    if (!profile || !lib.isSpotifyImageUrl(profile.avatar_url)) return lib.json(res, 404, { error: 'No Spotify profile image is available.' });
+    lib.requestBuffer(profile.avatar_url, {
+      headers: { Accept: 'image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1' }
+    }, function (imageErr, status, image, headers) {
+      if (imageErr || status !== 200 || !image || !image.length) return lib.json(res, 502, { error: 'Could not load the Spotify profile image.' });
+      var contentType = headers && headers['content-type'] ? String(headers['content-type']).split(';')[0].toLowerCase() : '';
+      if (contentType !== 'image/jpeg' && contentType !== 'image/png' && contentType !== 'image/gif') {
+        return lib.json(res, 502, { error: 'Spotify returned an unsupported profile image format.' });
+      }
+      lib.securityHeaders(res);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.end(image);
+    });
+  });
+}
 function addProfile(req, res, body) {
   var code = body && body.code;
   code = String(code || '').replace(/[^a-z0-9]/ig, '').toUpperCase();
@@ -233,7 +267,11 @@ function addProfile(req, res, body) {
 }
 module.exports = function (req, res) {
   var method = (req.method || '').toUpperCase();
-  if (method === 'GET') return listProfiles(req, res);
+  if (method === 'GET') {
+    var query = req.query || {};
+    if (query && query.avatar !== undefined) return serveProfileAvatar(req, res);
+    return listProfiles(req, res);
+  }
   if (method !== 'POST') return lib.json(res, 405, { error: 'Expected GET or POST but received ' + req.method + '.' });
   lib.readBody(req, function (raw) {
     var body;

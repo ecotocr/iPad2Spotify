@@ -103,8 +103,8 @@ test('profile listing refreshes missing Spotify account name and avatar metadata
   assert.strictEqual(saved.profiles[0].refresh_token, 'rotated-refresh-token');
   assert.strictEqual(saved.profiles[1].refresh_token, 'rotated-second-refresh-token');
   assert.strictEqual(saved.profiles[1].id, 'opaque-profile-id');
-  assert.strictEqual(saved.profiles[0].profile_metadata_version, 2);
-  assert.strictEqual(saved.profiles[1].profile_metadata_version, 2);
+  assert.strictEqual(saved.profiles[0].profile_metadata_version, 3);
+  assert.strictEqual(saved.profiles[1].profile_metadata_version, 3);
   var sessionCookie = setCookieValues(res).filter(function (value) { return /^spotify_session=/.test(value); })[0];
   var activeSession = lib.openSession(decodeURIComponent(sessionCookie.split(';')[0].split('=').slice(1).join('=')));
   assert.strictEqual(activeSession.profile_id, 'opaque-profile-id');
@@ -191,6 +191,53 @@ test('removing the selected profile also clears its active session cookie', func
     assert.strictEqual(res.statusCode, 200);
     var cookies = setCookieValues(res);
     assert.ok(cookies.some(function (value) { return /^spotify_session=; Max-Age=0/.test(value); }));
+    done();
+  });
+});
+
+test('profile avatar route proxies only the selected installation profile image', function (t, done) {
+  var storeId = lib.random(32), requestedUrl = null;
+  var restore = stubLib({
+    kvGet: function (key, cb) {
+      assert.strictEqual(key, 'profiles:' + storeId);
+      cb(null, { profiles: [{ id: 'avatar-user', avatar_url: 'https://image-cdn-ak.spotifycdn.com/image/avatar', refresh_token: 'private-token' }] });
+    },
+    requestBuffer: function (url, options, cb) {
+      requestedUrl = url;
+      assert.match(options.headers.Accept, /image\/jpeg/);
+      cb(null, 200, Buffer.from('JPEG-DATA'), { 'content-type': 'image/jpeg' });
+    }
+  });
+  var req = helpers.fakeReq('GET', '/api/auth/pair?avatar=avatar-user', 'spotify_profile_store=' + storeId);
+  req.query = { avatar: 'avatar-user' };
+  var res = helpers.fakeRes();
+  pair(req, res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(requestedUrl, 'https://image-cdn-ak.spotifycdn.com/image/avatar');
+    assert.strictEqual(res.headers['Content-Type'], 'image/jpeg');
+    assert.match(res.headers['Cache-Control'], /private/);
+    assert.deepStrictEqual(res.body, Buffer.from('JPEG-DATA'));
+    done();
+  });
+});
+
+test('profile avatar route refuses untrusted image hosts', function (t, done) {
+  var storeId = lib.random(32);
+  var restore = stubLib({
+    kvGet: function (key, cb) {
+      cb(null, { profiles: [{ id: 'avatar-user', avatar_url: 'https://example.test/avatar.jpg', refresh_token: 'private-token' }] });
+    },
+    requestBuffer: function () { throw new Error('Untrusted image hosts must not be fetched.'); }
+  });
+  var req = helpers.fakeReq('GET', '/api/auth/pair?avatar=avatar-user', 'spotify_profile_store=' + storeId);
+  req.query = { avatar: 'avatar-user' };
+  var res = helpers.fakeRes();
+  pair(req, res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 404);
     done();
   });
 });

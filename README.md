@@ -31,7 +31,7 @@ An iPad 2 Home Screen web app runs in fullscreen mode, but interactive Spotify O
 3. Return to the app on the iPad, enter the pairing code, and add the profile.
 4. Choose the Spotify profile from the landing page to open its player.
 
-Profiles are saved for that browser installation. Tap **Add profile** to add another account; tapping the iPad2Spotify heading returns to the profile picker. Adding an account never switches the active player automatically. Select **Remove** beneath a profile to remove it from this installation; this does not revoke the app from that Spotify account.
+Profiles are saved for that browser installation. Tap **Add profile** to add another account; tapping the iPad2Spotify heading returns to the profile picker. Adding an account never switches the active player automatically. In the player, use **Remove profile** next to **Disconnect** to remove the selected account from this installation; this does not revoke Spotify authorization.
 
 Each profile is authorized separately but uses the same Spotify app credentials configured for the Vercel deployment. If a profile predates the `user-read-private` scope, use **Add profile** and authorize that account again to refresh its display name and image. Spotify may omit those fields if they are not set on the Spotify account. Playback is read for the selected Spotify account only, so the selected account must be the one currently playing music.
 
