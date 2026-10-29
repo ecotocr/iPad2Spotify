@@ -79,6 +79,42 @@ test('starts a playlist with a valid playlist id via playlist context_uri', func
   });
 });
 
+test('starts a selected track at its position inside the playlist context', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) { calledWith = { url: url, options: options }; cb(null, 204, null); }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_playlist_track', playlist_id: '37i9dQZF1DX4JAvHpjipBk', position: 56
+  }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(helpers.resBody(res)));
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/play');
+    assert.deepStrictEqual(JSON.parse(calledWith.options.body), {
+      context_uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk', offset: { position: 56 }
+    });
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
+test('rejects invalid selected playlist track positions', function (t, done) {
+  var restore = stubLib({ rateLimit: noKv, kvGet: noKv, spotifyToken: validToken });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_playlist_track', playlist_id: '37i9dQZF1DX4JAvHpjipBk', position: -1
+  }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 400);
+    assert.match(helpers.resBody(res).error, /position/i);
+    done();
+  });
+});
+
 test('proxies a known action to the matching Spotify endpoint', function (t, done) {
   var calledWith = null;
   var restore = stubLib({

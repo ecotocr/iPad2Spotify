@@ -86,6 +86,66 @@ test('device lookup lists available devices without requiring a current playback
   });
 });
 
+test('current playlist request lists sanitized tracks with stable playlist offsets', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) {
+        return cb(null, 200, {
+          context: { type: 'playlist', uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk' },
+          item: { uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK' }
+        });
+      }
+      cb(null, 200, { total: 72, items: [
+        { item: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] } },
+        { item: { type: 'track', uri: 'spotify:track:anotherTrackId1', name: 'Next Song', artists: [{ name: 'Other' }] } }
+      ] });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1&offset=50', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    var body = helpers.resBody(res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(urls, [
+      'https://api.spotify.com/v1/me/player/currently-playing',
+      'https://api.spotify.com/v1/playlists/37i9dQZF1DX4JAvHpjipBk/items?limit=50&offset=50'
+    ]);
+    assert.strictEqual(body.playlist_id, '37i9dQZF1DX4JAvHpjipBk');
+    assert.strictEqual(body.items[0].position, 50);
+    assert.strictEqual(body.items[0].artists[0], 'Artist');
+    assert.strictEqual(body.items[0].playable, true);
+    assert.strictEqual(body.total, 72);
+    assert.strictEqual(body.next_offset, 52);
+    assert.strictEqual(body.current_track_uri, 'spotify:track:4NHQUGzhtTLFvgF5SZesLK');
+    done();
+  });
+});
+
+test('playlist lookup refuses a playlist different from the active playback context', function (t, done) {
+  var playlistRequests = 0;
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      if (url.indexOf('/playlists/') !== -1) playlistRequests++;
+      cb(null, 200, { context: { type: 'playlist', uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk' }, item: {} });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1&playlist_id=37i9dQZF1DX4JAvHpjipB1&offset=0', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 409);
+    assert.strictEqual(playlistRequests, 0);
+    done();
+  });
+});
+
 test('a rotated Spotify refresh token is written back to the cookie', function (t, done) {
   var restore = stubLib(withRedisFree({
     config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },

@@ -104,7 +104,7 @@ test('Spotify profile lookup accepts Spotify profile-image CDN hosts only', func
         id: 'SpotifyUser',
         display_name: 'Spotify Name',
         images: [
-          { url: 'https://image-cdn-ak.spotifycdn.com/image/avatar' },
+          { url: 'https://image-cdn-fa.spotifycdn.com/image/avatar' },
           { url: 'https://example.test/other' }
         ]
       });
@@ -116,7 +116,7 @@ test('Spotify profile lookup accepts Spotify profile-image CDN hosts only', func
     assert.deepStrictEqual(profile, {
       user_id: 'SpotifyUser',
       display_name: 'Spotify Name',
-      avatar_url: 'https://image-cdn-ak.spotifycdn.com/image/avatar'
+      avatar_url: 'https://image-cdn-fa.spotifycdn.com/image/avatar'
     });
     done();
   });

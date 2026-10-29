@@ -27,27 +27,31 @@ module.exports = function (req, res) {
   lib.readBody(req, function (raw) { var body; try { body = JSON.parse(raw); } catch (e) {}
     var isArtist = body && body.action === 'play_artist';
     var isPlaylist = body && body.action === 'play_playlist';
+    var isPlaylistTrack = body && body.action === 'play_playlist_track';
+    var isPlaylistContext = isPlaylist || isPlaylistTrack;
     var isSeek = body && body.action === 'seek';
     var isDeviceTransfer = body && body.action === 'transfer_device';
     var isVolume = body && body.action === 'volume';
     var volumeDeviceId = isVolume && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     var transferDeviceId = isDeviceTransfer && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
+    var playlistPosition = isPlaylistTrack && Number.isInteger(body.position) && body.position >= 0 && body.position <= 100000 ? body.position : null;
     if (isSeek && (!Number.isInteger(body.position_ms) || body.position_ms < 0 || body.position_ms > 86400000)) return lib.json(res, 400, { error: 'Seek position must be a whole number between 0 and 86400000 milliseconds.' });
     if (isVolume && (typeof body.volume_percent !== 'number' || body.volume_percent % 1 !== 0 || body.volume_percent < 0 || body.volume_percent > 100)) return lib.json(res, 400, { error: 'Volume must be a whole number between 0 and 100 percent.' });
     if (isVolume && body.device_id !== undefined && !volumeDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
-    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isVolume ? ['PUT', '/me/player/volume?volume_percent=' + body.volume_percent] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylist && paths[body && body.action]);
-    var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylist ? idFrom(body, 'playlist_id') : null);
-    if ((isArtist || isPlaylist) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
+    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isVolume ? ['PUT', '/me/player/volume?volume_percent=' + body.volume_percent] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylistContext && paths[body && body.action]);
+    var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylistContext ? idFrom(body, 'playlist_id') : null);
+    if ((isArtist || isPlaylistContext) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
+    if (isPlaylistTrack && playlistPosition === null) return lib.json(res, 400, { error: 'Choose a valid playlist track position.' });
     if (isDeviceTransfer && !transferDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
-    if (!isArtist && !isPlaylist && !target) return lib.json(res, 400, { error: 'Unknown playback command.' });
+    if (!isArtist && !isPlaylistContext && !target) return lib.json(res, 400, { error: 'Unknown playback command.' });
     lib.getSession(req, res, function (err, session) { if (err || !session) return lib.json(res, 401, { error: 'Session expired. Pair again.' }); var cfg = lib.config(req); lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) { if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired.' });
       lib.updateRefreshToken(res, session, token, function (saveErr) {
       if (saveErr) return lib.json(res, 503, { error: 'Could not save refreshed Spotify profile credentials.' });
       function sendCommand(deviceId) {
-        var method = (isArtist || isPlaylist) ? 'PUT' : target[0];
-        var path = (isArtist || isPlaylist) ? '/me/player/play' : target[1];
+        var method = (isArtist || isPlaylistContext) ? 'PUT' : target[0];
+        var path = (isArtist || isPlaylistContext) ? '/me/player/play' : target[1];
         if (deviceId) path += (path.indexOf('?') === -1 ? '?' : '&') + 'device_id=' + encodeURIComponent(deviceId);
-        var payload = isArtist ? JSON.stringify({ context_uri: 'spotify:artist:' + actionId }) : isPlaylist ? JSON.stringify({ context_uri: 'spotify:playlist:' + actionId }) : isDeviceTransfer ? JSON.stringify({ device_ids: [transferDeviceId], play: true }) : null;
+        var payload = isArtist ? JSON.stringify({ context_uri: 'spotify:artist:' + actionId }) : isPlaylistTrack ? JSON.stringify({ context_uri: 'spotify:playlist:' + actionId, offset: { position: playlistPosition } }) : isPlaylist ? JSON.stringify({ context_uri: 'spotify:playlist:' + actionId }) : isDeviceTransfer ? JSON.stringify({ device_ids: [transferDeviceId], play: true }) : null;
         var headers = { Authorization: 'Bearer ' + token.access_token };
         if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); } else { headers['Content-Length'] = 0; }
         lib.request('https://api.spotify.com/v1' + path, { method: method, headers: headers, body: payload }, function (apiErr, status, data) {

@@ -8,7 +8,7 @@ module.exports = function (req, res) {
   var state = lib.random(18);
   lib.setCookie(res, 'spotify_oauth_state', state, 600, !lib.isLocalHost(req));
   lib.redirect(res, 'https://accounts.spotify.com/authorize?' + [
-    'response_type=code', 'client_id=' + encodeURIComponent(cfg.id), 'scope=' + encodeURIComponent('user-read-private user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played'), 'redirect_uri=' + encodeURIComponent(cfg.redirect), 'state=' + encodeURIComponent(state), 'show_dialog=true'
+    'response_type=code', 'client_id=' + encodeURIComponent(cfg.id), 'scope=' + encodeURIComponent('user-read-private user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played playlist-read-private playlist-read-collaborative'), 'redirect_uri=' + encodeURIComponent(cfg.redirect), 'state=' + encodeURIComponent(state), 'show_dialog=true'
   ].join('&'));
   });
 };

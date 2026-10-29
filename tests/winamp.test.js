@@ -165,6 +165,15 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /remove_profile_id/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /remove-profile-modal/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /\/api\/auth\/pair\?avatar=/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /function createPlaylistUi/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /playlist-close/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /currently-playing\?playlist=1/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /play_playlist_track/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /profile photo URL, but it could not be downloaded/);
+  assert.match(css, /\.playlist-close\{position:absolute/);
+  assert.match(css, /\.playlist-list\{max-height:55vh;overflow-y:auto/);
+  assert.match(css, /\.icon-prev:before\{[^}]*translate\(8px,-50%\)/);
+  assert.match(css, /\.icon-next:after\{[^}]*translate\(7px,-50%\)/);
   assert.match(css, /\.volume-adjustment\{display:-webkit-box;display:-webkit-flex;display:flex/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
@@ -247,7 +256,7 @@ test('main menu offers Options, Set background and Exit; no separate exit button
   assert.doesNotMatch(src, /wa-exit/);
   const vercel = fs.readFileSync(path.join(root, 'vercel.json'), 'utf8');
   assert.match(vercel, /img-src 'self' data:/);
-  assert.match(vercel, /image-cdn-ak\.spotifycdn\.com/);
+  assert.match(vercel, /https:\/\/\*\.spotifycdn\.com/);
 });
 
 // Visualizer bridge: engine exposes getAudioAnalysisBands; winamp.js prefers

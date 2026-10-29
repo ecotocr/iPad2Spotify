@@ -2,7 +2,7 @@ var crypto = require('crypto');
 var kv = require('./_kv');
 
 function securityHeaders(res) {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co https://image-cdn-ak.spotifycdn.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -93,7 +93,7 @@ function setProfileStore(res, storeId, secure) {
 function profileKey(storeId) { return 'profiles:' + storeId; }
 function createProfileId(userId) { return badgeId(userId) || random(18); }
 function isSpotifyImageUrl(value) {
-  return typeof value === 'string' && /^https:\/\/(?:i\.scdn\.co|image-cdn-ak\.spotifycdn\.com)\//.test(value);
+  return typeof value === 'string' && /^https:\/\/(?:i\.scdn\.co|image-cdn(?:-[a-z0-9]+)?\.spotifycdn\.com)\//i.test(value);
 }
 function publicProfile(profile) {
   return {

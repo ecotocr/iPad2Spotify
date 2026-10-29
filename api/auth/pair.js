@@ -1,7 +1,7 @@
 var lib = require('../_lib');
 function refreshProfileMetadata(req, profiles, session, callback) {
   var pending = profiles.filter(function (profile) {
-    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 3;
+    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 4;
   });
   var changed = false, sessionChanged = false, sessionTokenChanged = false, warningCount = 0, index = 0, cfg = lib.config(req);
   function next() {
@@ -30,12 +30,12 @@ function refreshProfileMetadata(req, profiles, session, callback) {
         profile.user_id = details.user_id;
         if (details.display_name) profile.display_name = details.display_name;
         else if (profile.display_name === profile.user_id || profile.display_name === details.user_id) profile.display_name = null;
-        if (details.avatar_url) profile.avatar_url = details.avatar_url;
+        profile.avatar_url = details.avatar_url || null;
         if (session && session.profile_id === profile.id) {
           session.user_id = details.user_id;
           sessionChanged = true;
         }
-        profile.profile_metadata_version = 3;
+        profile.profile_metadata_version = 4;
         changed = true;
         next();
       });
@@ -182,21 +182,34 @@ function serveProfileAvatar(req, res) {
       }
     }
     if (!profile || !lib.isSpotifyImageUrl(profile.avatar_url)) return lib.json(res, 404, { error: 'No Spotify profile image is available.' });
-    lib.requestBuffer(profile.avatar_url, {
-      headers: { Accept: 'image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1' }
-    }, function (imageErr, status, image, headers) {
-      if (imageErr || status !== 200 || !image || !image.length) return lib.json(res, 502, { error: 'Could not load the Spotify profile image.' });
-      var contentType = headers && headers['content-type'] ? String(headers['content-type']).split(';')[0].toLowerCase() : '';
-      if (contentType !== 'image/jpeg' && contentType !== 'image/png' && contentType !== 'image/gif') {
-        return lib.json(res, 502, { error: 'Spotify returned an unsupported profile image format.' });
-      }
-      lib.securityHeaders(res);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'private, max-age=3600');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.end(image);
-    });
+    function fetchImage(imageUrl, redirects) {
+      lib.requestBuffer(imageUrl, {
+        headers: { Accept: 'image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1' }
+      }, function (imageErr, status, image, headers) {
+        if (imageErr) return lib.json(res, 502, { error: 'Could not load the Spotify profile image.' });
+        if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+          if (redirects >= 3 || !headers || !headers.location) return lib.json(res, 502, { error: 'Spotify redirected the profile image too many times.' });
+          var nextUrl;
+          try { nextUrl = new (require('url').URL)(headers.location, imageUrl).toString(); } catch (e) {
+            return lib.json(res, 502, { error: 'Spotify returned an invalid profile image redirect.' });
+          }
+          if (!lib.isSpotifyImageUrl(nextUrl)) return lib.json(res, 502, { error: 'Spotify redirected the profile image to an unsupported host.' });
+          return fetchImage(nextUrl, redirects + 1);
+        }
+        if (status !== 200 || !image || !image.length) return lib.json(res, 502, { error: 'Could not load the Spotify profile image.' });
+        var contentType = headers && headers['content-type'] ? String(headers['content-type']).split(';')[0].toLowerCase() : '';
+        if (contentType !== 'image/jpeg' && contentType !== 'image/png' && contentType !== 'image/gif') {
+          return lib.json(res, 502, { error: 'Spotify returned an unsupported profile image format.' });
+        }
+        lib.securityHeaders(res);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.end(image);
+      });
+    }
+    fetchImage(profile.avatar_url, 0);
   });
 }
 function addProfile(req, res, body) {

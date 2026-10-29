@@ -110,3 +110,22 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .player-account-actions .remove-profile-button{margin-left:8px;padding:9px 13px;border:1px solid #39443c;border-radius:3px;background:#252b28;color:#929b92;font-size:11px;cursor:pointer}
 .player-account-actions .remove-profile-button:active{color:#f5f1e8;background:#344238}
 @media(max-width:600px){.player:not(.hidden)~.player-account-actions{right:12px;bottom:12px}}
+.icon-prev:before{-webkit-transform:translate(8px,-50%);transform:translate(8px,-50%)}
+.icon-prev:after{-webkit-transform:translate(-7px,-50%);transform:translate(-7px,-50%)}
+.icon-next:before{-webkit-transform:translate(-8px,-50%);transform:translate(-8px,-50%)}
+.icon-next:after{-webkit-transform:translate(7px,-50%);transform:translate(7px,-50%)}
+.playlist-box{width:480px;max-width:90%;max-height:calc(100vh - 40px);overflow:hidden;padding:22px;text-align:left}
+.playlist-header{position:relative;min-height:42px;padding:4px 48px 0 0}
+.playlist-box #playlist-question{margin:0;color:#f5f1e8;font-family:Georgia,serif;font-size:23px}
+.playlist-close{position:absolute;top:0;right:0;width:40px;height:40px;padding:0;border:1px solid #39443c;border-radius:3px;background:#252b28;color:#c5cec2;font-size:25px;line-height:36px;text-align:center;cursor:pointer}
+.playlist-box #playlist-message{margin:8px 0 12px}
+.playlist-list{max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.playlist-box .playlist-track{position:relative;display:block;width:100%;margin:0;padding:10px 95px 10px 12px;border:0;border-top:1px solid #39443c;border-radius:0;background:#202b25;color:#f5f1e8;text-align:left;text-transform:none;font:14px Arial,"Helvetica Neue",sans-serif;cursor:pointer}
+.playlist-box .playlist-track:active:not(:disabled),.playlist-box .playlist-track.is-playing{background:#344238}
+.playlist-box .playlist-track:disabled{opacity:.5;cursor:default}
+.playlist-track-title,.playlist-track-artist{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playlist-track-title{font-weight:bold}
+.playlist-track-artist{margin-top:4px;color:#aab3aa;font-size:12px}
+.playlist-track-marker{position:absolute;top:50%;right:10px;color:#b6d64b;font-size:9px;font-weight:bold;-webkit-transform:translateY(-50%);transform:translateY(-50%)}
+.playlist-box #playlist-more{margin-top:10px}
+@media(max-width:600px){.playlist-box{width:calc(100% - 24px);max-width:none;padding:18px}.playlist-list{max-height:58vh}}

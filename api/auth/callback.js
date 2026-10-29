@@ -14,7 +14,7 @@ module.exports = function (req, res) {
       refresh_token: data.refresh_token,
       created: new Date().getTime(),
       expires: new Date().getTime() + 600000,
-      profile_metadata_version: !profileErr && profile ? 3 : 0
+      profile_metadata_version: !profileErr && profile ? 4 : 0
     };
     if (profile) {
       record.user_id = profile.user_id;

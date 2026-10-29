@@ -28,6 +28,13 @@ module.exports = function (req, res) {
     });
   }
   var devicesRequested = query.get('devices') === '1';
+  var playlistRequested = query.get('playlist') === '1';
+  var requestedPlaylistId = query.get('playlist_id');
+  var playlistOffset = query.get('offset') === null ? 0 : Number(query.get('offset'));
+  if (playlistRequested && (requestedPlaylistId && !/^[A-Za-z0-9]{10,30}$/.test(requestedPlaylistId) || !Number.isInteger(playlistOffset) || playlistOffset < 0 || playlistOffset > 100000)) {
+    return lib.json(res, 400, { error: 'Choose a valid playlist and track offset.' });
+  }
+  if (playlistRequested && lib.memoryRateLimit(req, 'playlist-tracks', 10, 60)) return lib.json(res, 429, { error: 'Too many playlist requests. Try again shortly.' });
   if (devicesRequested && lib.memoryRateLimit(req, 'devices', 10, 60)) return lib.json(res, 429, { error: 'Too many device-list requests. Try again shortly.' });
   if (!devicesRequested && lib.memoryRateLimit(req, 'poll', 40, 60)) return lib.json(res, 429, { error: 'Polling too frequently. Try again shortly.' });
   lib.getSession(req, res, function (err, session) {
@@ -55,6 +62,54 @@ module.exports = function (req, res) {
                 volume_percent: typeof device.volume_percent === 'number' ? device.volume_percent : null
               };
             })
+          });
+        });
+        return;
+      }
+      if (playlistRequested) {
+        lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: { Authorization: 'Bearer ' + token.access_token } }, function (playbackErr, playbackStatus, playback) {
+          if (playbackErr) return lib.json(res, 502, { error: 'Could not identify the currently playing playlist.' });
+          if (playbackStatus !== 200 || !playback || !playback.context) {
+            return lib.json(res, 409, { error: 'Spotify is not currently playing from a playlist.' });
+          }
+          var contextMatch = typeof playback.context.uri === 'string' && playback.context.uri.match(/^spotify:playlist:([A-Za-z0-9]{10,30})$/);
+          if (!contextMatch) return lib.json(res, 409, { error: 'The current playback is not from a Spotify playlist.' });
+          var playlistId = contextMatch[1];
+          if (requestedPlaylistId && requestedPlaylistId !== playlistId) {
+            return lib.json(res, 409, { error: 'Playback has moved to a different playlist. Refresh the track list.' });
+          }
+          var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/items?limit=50&offset=' + playlistOffset;
+          lib.request(playlistUrl, { headers: { Authorization: 'Bearer ' + token.access_token } }, function (playlistErr, playlistStatus, playlistData) {
+            if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
+            if (playlistStatus === 403) {
+              return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
+            }
+            if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
+              return lib.json(res, playlistStatus || 502, { error: 'Spotify could not load the current playlist tracks.' });
+            }
+            var items = playlistData.items.map(function (entry, index) {
+              var track = entry && (entry.item || entry.track);
+              if (!track) return null;
+              var artists = Array.isArray(track.artists) ? track.artists.map(function (artist) {
+                return artist && typeof artist.name === 'string' ? artist.name.slice(0, 100) : '';
+              }).filter(Boolean) : [];
+              return {
+                position: playlistOffset + index,
+                uri: typeof track.uri === 'string' ? track.uri : null,
+                name: typeof track.name === 'string' ? track.name.slice(0, 200) : 'Unavailable track',
+                artists: artists,
+                playable: !entry.is_local && track.is_local !== true && track.type === 'track' && typeof track.uri === 'string' && track.uri.indexOf('spotify:track:') === 0
+              };
+            }).filter(Boolean);
+            var total = Number.isInteger(playlistData.total) ? playlistData.total : playlistOffset + items.length;
+            var nextOffset = playlistOffset + playlistData.items.length;
+            lib.json(res, 200, {
+              playlist_id: playlistId,
+              items: items,
+              total: total,
+              current_track_uri: playback.item && playback.item.uri || null,
+              next_offset: nextOffset < total ? nextOffset : null
+            });
           });
         });
         return;
