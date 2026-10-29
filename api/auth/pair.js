@@ -1,4 +1,48 @@
 var lib = require('../_lib');
+function refreshProfileMetadata(req, profiles, session, callback) {
+  var pending = profiles.filter(function (profile) {
+    return profile && typeof profile.refresh_token === 'string' && !profile.profile_metadata_checked;
+  });
+  var changed = false, sessionChanged = false, sessionTokenChanged = false, warningCount = 0, index = 0, cfg = lib.config(req);
+  function next() {
+    if (index >= pending.length) return callback(changed, sessionChanged, warningCount, sessionTokenChanged);
+    var profile = pending[index++];
+    lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(profile.refresh_token), function (tokenErr, tokenStatus, token) {
+      if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) {
+        warningCount++;
+        return next();
+      }
+      if (token.refresh_token && token.refresh_token !== profile.refresh_token) {
+        profile.refresh_token = token.refresh_token;
+        changed = true;
+        if (session && session.profile_id === profile.id) {
+          session.refresh_token = token.refresh_token;
+          session.profile_sync_pending = true;
+          sessionChanged = true;
+          sessionTokenChanged = true;
+        }
+      }
+      lib.spotifyUserProfile(token.access_token, function (profileErr, details) {
+        if (profileErr || !details) {
+          warningCount++;
+          return next();
+        }
+        profile.user_id = details.user_id;
+        if (details.display_name) profile.display_name = details.display_name;
+        else if (profile.display_name === profile.user_id || profile.display_name === details.user_id) profile.display_name = null;
+        if (details.avatar_url) profile.avatar_url = details.avatar_url;
+        if (session && session.profile_id === profile.id) {
+          session.user_id = details.user_id;
+          sessionChanged = true;
+        }
+        profile.profile_metadata_checked = true;
+        changed = true;
+        next();
+      });
+    });
+  }
+  next();
+}
 function listProfiles(req, res) {
   if (lib.memoryRateLimit(req, 'profiles', 30, 60)) return lib.json(res, 429, { error: 'Too many profile requests. Try again shortly.' });
   lib.getSession(req, res, function (sessionErr, session) {
@@ -7,7 +51,7 @@ function listProfiles(req, res) {
       if (storeErr) return lib.json(res, 500, { error: 'Could not initialize this installation.' });
       lib.getProfileStore(storeId, function (profileErr, profiles) {
         if (profileErr) return lib.json(res, 503, { error: 'Could not load saved Spotify profiles.' });
-        var changed = false;
+        var changed = false, sessionChanged = false;
         if (session && session.refresh_token) {
           var profileId = session.profile_id || lib.createProfileId(session.user_id);
           var matching = null;
@@ -35,19 +79,33 @@ function listProfiles(req, res) {
           }
           session.profile_id = profileId;
           session.profile_store_id = storeId;
-          lib.setSession(res, session, !lib.isLocalHost(req));
+          sessionChanged = true;
         }
-        function respond() {
-          lib.json(res, 200, {
-            profiles: profiles.filter(function (profile) {
-              return profile && typeof profile.id === 'string' && typeof profile.refresh_token === 'string';
-            }).map(lib.publicProfile)
+        refreshProfileMetadata(req, profiles, session, function (metadataChanged, metadataSessionChanged, warningCount, sessionTokenChanged) {
+          changed = changed || metadataChanged;
+          sessionChanged = sessionChanged || metadataSessionChanged;
+          function respond() {
+            if (sessionChanged && !lib.setSession(res, session, !lib.isLocalHost(req))) {
+              return lib.json(res, 500, { error: 'Session encryption is not configured.' });
+            }
+            lib.json(res, 200, {
+              profiles: profiles.filter(function (profile) {
+                return profile && typeof profile.id === 'string' && typeof profile.refresh_token === 'string';
+              }).map(lib.publicProfile),
+              profile_warning_count: warningCount
+            });
+          }
+          if (!changed) return respond();
+          lib.saveProfileStore(storeId, profiles, function (saveErr) {
+            if (saveErr) {
+              if (sessionTokenChanged && !lib.setSession(res, session, !lib.isLocalHost(req))) {
+                return lib.json(res, 500, { error: 'Session encryption is not configured.' });
+              }
+              return lib.json(res, 503, { error: 'Could not save this Spotify profile on the installation.' });
+            }
+            if (session && session.profile_sync_pending) delete session.profile_sync_pending;
+            respond();
           });
-        }
-        if (!changed) return respond();
-        lib.saveProfileStore(storeId, profiles, function (saveErr) {
-          if (saveErr) return lib.json(res, 503, { error: 'Could not save this Spotify profile on the installation.' });
-          respond();
         });
       });
     });
@@ -106,6 +164,7 @@ function addProfile(req, res, body) {
                 user_id: record.user_id || null,
                 display_name: record.display_name || null,
                 avatar_url: record.avatar_url || null,
+                profile_metadata_checked: !!record.profile_metadata_checked,
                 refresh_token: record.refresh_token
               });
               if (currentSession && currentSession.profile_id === profile.id) {

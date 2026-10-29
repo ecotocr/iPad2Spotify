@@ -107,13 +107,26 @@ test('Spotify profile lookup returns a validated display name and CDN avatar', f
       });
     }
   });
-  lib.spotifyUserProfile('access-token', function (profile) {
+  lib.spotifyUserProfile('access-token', function (err, profile) {
     restore();
+    assert.ifError(err);
     assert.deepStrictEqual(profile, {
       user_id: 'SpotifyUser',
       display_name: 'Spotify Name',
       avatar_url: 'https://i.scdn.co/image/avatar'
     });
+    done();
+  });
+});
+
+test('Spotify profile lookup reports failures instead of silently returning no profile', function (t, done) {
+  var restore = stubLib({
+    request: function (url, options, cb) { cb(null, 403, { error: { status: 403, message: 'Insufficient client scope' } }); }
+  });
+  lib.spotifyUserProfile('access-token', function (err, profile) {
+    restore();
+    assert.match(err.message, /HTTP 403/);
+    assert.strictEqual(profile, null);
     done();
   });
 });

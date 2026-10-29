@@ -38,7 +38,8 @@ test('profile listing migrates an existing single-account session into the insta
   var cookie = 'spotify_session=' + lib.sealSession({ refresh_token: 'private-refresh-token', user_id: 'user123' });
   var restore = stubLib({
     kvGet: function (key, cb) { cb(null, null); },
-    kvSet: function (key, value, seconds, cb) { saved = { key: key, value: value }; cb(null); }
+    kvSet: function (key, value, seconds, cb) { saved = { key: key, value: value }; cb(null); },
+    spotifyToken: function (cfg, body, cb) { cb(null, 401, { error: 'invalid_grant' }); }
   });
   var res = helpers.fakeRes();
   pair(helpers.fakeReq('GET', '/api/auth/pair', cookie), res);
@@ -50,10 +51,65 @@ test('profile listing migrates an existing single-account session into the insta
     assert.doesNotMatch(JSON.stringify(helpers.resBody(res)), /private-refresh-token/);
     assert.match(saved.key, /^profiles:/);
     assert.strictEqual(saved.value.profiles[0].refresh_token, 'private-refresh-token');
+    assert.strictEqual(helpers.resBody(res).profile_warning_count, 1);
     assert.ok(setCookieValues(res).some(function (value) { return /^spotify_profile_store=/.test(value); }));
     assert.ok(setCookieValues(res).some(function (value) { return /^spotify_session=/.test(value); }));
     done();
   });
+});
+
+test('profile listing refreshes missing Spotify account name and avatar metadata', function () {
+  var storeId = lib.random(32);
+  var stored = {
+    profiles: [
+      { id: 'spotify-user-id', user_id: 'spotify-user-id', display_name: 'spotify-user-id', refresh_token: 'old-refresh-token' },
+      { id: 'opaque-profile-id', refresh_token: 'old-second-refresh-token' }
+    ]
+  };
+  var saved = null;
+  var cookie = 'spotify_profile_store=' + storeId + '; spotify_session=' + lib.sealSession({
+    refresh_token: 'old-second-refresh-token', profile_id: 'opaque-profile-id'
+  });
+  var restore = stubLib({
+    config: function () { return { id: 'client-id', secret: 'client-secret' }; },
+    kvGet: function (key, cb) {
+      assert.strictEqual(key, 'profiles:' + storeId);
+      cb(null, stored);
+    },
+    kvSet: function (key, value, seconds, cb) { saved = value; cb(null); },
+    spotifyToken: function (cfg, body, cb) {
+      if (/old-refresh-token/.test(body)) return cb(null, 200, { access_token: 'first-access', refresh_token: 'rotated-refresh-token' });
+      assert.match(body, /refresh_token=old-second-refresh-token/);
+      cb(null, 200, { access_token: 'second-access', refresh_token: 'rotated-second-refresh-token' });
+    },
+    spotifyUserProfile: function (accessToken, cb) {
+      if (accessToken === 'first-access') {
+        return cb(null, { user_id: 'spotify-user-id', display_name: 'Esteban', avatar_url: 'https://i.scdn.co/image/avatar' });
+      }
+      assert.strictEqual(accessToken, 'second-access');
+      cb(null, { user_id: 'second-user-id', display_name: 'Second user', avatar_url: 'https://i.scdn.co/image/avatar-2' });
+    }
+  });
+  var res = helpers.fakeRes();
+  pair(helpers.fakeReq('GET', '/api/auth/pair', cookie), res);
+  restore();
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(helpers.resBody(res).profiles[0].display_name, 'Esteban');
+  assert.strictEqual(helpers.resBody(res).profiles[0].avatar_url, 'https://i.scdn.co/image/avatar');
+  assert.strictEqual(helpers.resBody(res).profiles[1].id, 'opaque-profile-id');
+  assert.strictEqual(helpers.resBody(res).profiles[1].display_name, 'Second user');
+  assert.strictEqual(helpers.resBody(res).profiles[1].user_id, 'second-user-id');
+  assert.strictEqual(helpers.resBody(res).profile_warning_count, 0);
+  assert.strictEqual(saved.profiles[0].refresh_token, 'rotated-refresh-token');
+  assert.strictEqual(saved.profiles[1].refresh_token, 'rotated-second-refresh-token');
+  assert.strictEqual(saved.profiles[1].id, 'opaque-profile-id');
+  assert.strictEqual(saved.profiles[0].profile_metadata_checked, true);
+  assert.strictEqual(saved.profiles[1].profile_metadata_checked, true);
+  var sessionCookie = setCookieValues(res).filter(function (value) { return /^spotify_session=/.test(value); })[0];
+  var activeSession = lib.openSession(decodeURIComponent(sessionCookie.split(';')[0].split('=').slice(1).join('=')));
+  assert.strictEqual(activeSession.profile_id, 'opaque-profile-id');
+  assert.strictEqual(activeSession.user_id, 'second-user-id');
+  assert.strictEqual(activeSession.refresh_token, 'rotated-second-refresh-token');
 });
 
 test('profile selection installs only the chosen profile as the active session', function (t, done) {
@@ -88,6 +144,19 @@ test('profile selection rejects IDs that are not in the installation store', fun
   pair(helpers.fakeReq('POST', '/api/auth/pair', 'spotify_profile_store=' + lib.random(32), { profile_id: 'missing' }), res);
   restore();
   assert.strictEqual(res.statusCode, 404);
+});
+
+test('updating an existing Spotify user preserves the profile ID used by sessions', function () {
+  var profile = { id: 'opaque-profile-id', user_id: 'spotify-user-id', refresh_token: 'old-token' };
+  lib.upsertProfile([profile], {
+    id: 'spotify-user-id',
+    user_id: 'spotify-user-id',
+    display_name: 'Esteban',
+    refresh_token: 'new-token'
+  });
+  assert.strictEqual(profile.id, 'opaque-profile-id');
+  assert.strictEqual(profile.refresh_token, 'new-token');
+  assert.strictEqual(profile.display_name, 'Esteban');
 });
 
 test('adding a second account keeps the current active account selected', function (t, done) {

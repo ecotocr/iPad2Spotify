@@ -8,9 +8,14 @@ module.exports = function (req, res) {
   var body = 'grant_type=authorization_code&code=' + encodeURIComponent(q.code) + '&redirect_uri=' + encodeURIComponent(cfg.redirect);
   lib.spotifyToken(cfg, body, function (err, status, data) {
     if (err || status !== 200 || !data || !data.refresh_token) return lib.json(res, 502, { error: 'Spotify token exchange failed.' });
-    lib.spotifyUserProfile(data.access_token, function (profile) {
+    lib.spotifyUserProfile(data.access_token, function (profileErr, profile) {
     var pair = lib.pairingCode(8);
-    var record = { refresh_token: data.refresh_token, created: new Date().getTime(), expires: new Date().getTime() + 600000 };
+    var record = {
+      refresh_token: data.refresh_token,
+      created: new Date().getTime(),
+      expires: new Date().getTime() + 600000,
+      profile_metadata_checked: !profileErr && !!profile
+    };
     if (profile) {
       record.user_id = profile.user_id;
       record.display_name = profile.display_name;

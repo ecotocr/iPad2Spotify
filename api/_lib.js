@@ -95,7 +95,7 @@ function createProfileId(userId) { return badgeId(userId) || random(18); }
 function publicProfile(profile) {
   return {
     id: profile.id,
-    display_name: typeof profile.display_name === 'string' && profile.display_name ? profile.display_name : (profile.user_id || 'Spotify account'),
+    display_name: typeof profile.display_name === 'string' && profile.display_name ? profile.display_name : 'Spotify account',
     avatar_url: typeof profile.avatar_url === 'string' && /^https:\/\/i\.scdn\.co\//.test(profile.avatar_url) ? profile.avatar_url : null,
     user_id: profile.user_id || null
   };
@@ -109,11 +109,16 @@ function upsertProfile(profiles, profile) {
     }
   }
   if (existing) {
-    existing.id = profile.id;
     existing.refresh_token = profile.refresh_token;
     if (profile.user_id) existing.user_id = profile.user_id;
-    if (profile.display_name) existing.display_name = profile.display_name;
-    if (profile.avatar_url) existing.avatar_url = profile.avatar_url;
+    if (profile.profile_metadata_checked) {
+      existing.display_name = profile.display_name || null;
+      existing.avatar_url = profile.avatar_url || null;
+      existing.profile_metadata_checked = true;
+    } else {
+      if (profile.display_name) existing.display_name = profile.display_name;
+      if (profile.avatar_url) existing.avatar_url = profile.avatar_url;
+    }
     return existing;
   }
   profiles.push(profile);
@@ -202,7 +207,8 @@ function spotifyUserId(accessToken, callback) {
 }
 function spotifyUserProfile(accessToken, callback) {
   module.exports.request('https://api.spotify.com/v1/me', { headers: { Authorization: 'Bearer ' + accessToken }, timeout: 10000 }, function (err, status, data) {
-    if (err || status !== 200 || !data || !badgeId(data.id)) return callback(null);
+    if (err) return callback(err, null);
+    if (status !== 200 || !data || !badgeId(data.id)) return callback(new Error('Spotify profile request returned HTTP ' + status + '.'), null);
     var avatar = null;
     if (Array.isArray(data.images)) {
       for (var i = 0; i < data.images.length; i++) {
@@ -212,9 +218,9 @@ function spotifyUserProfile(accessToken, callback) {
         }
       }
     }
-    callback({
+    callback(null, {
       user_id: data.id,
-      display_name: typeof data.display_name === 'string' && data.display_name ? data.display_name.slice(0, 100) : data.id,
+      display_name: typeof data.display_name === 'string' && data.display_name.trim() ? data.display_name.trim().slice(0, 100) : null,
       avatar_url: avatar
     });
   });
