@@ -31,7 +31,7 @@ An iPad 2 Home Screen web app runs in fullscreen mode, but interactive Spotify O
 3. Return to the app on the iPad, enter the pairing code, and add the profile.
 4. Choose the Spotify profile from the landing page to open its player.
 
-Profiles are saved for that browser installation. Tap **Add profile** to add another account; tapping the iPad2Spotify heading returns to the profile picker. Adding an account never switches the active player automatically.
+Profiles are saved for that browser installation. Tap **Add profile** to add another account; tapping the iPad2Spotify heading returns to the profile picker. Adding an account never switches the active player automatically. Select **Remove** beneath a profile to remove it from this installation; this does not revoke the app from that Spotify account.
 
 Each profile is authorized separately but uses the same Spotify app credentials configured for the Vercel deployment. If a profile predates the `user-read-private` scope, use **Add profile** and authorize that account again to refresh its display name and image. Spotify may omit those fields if they are not set on the Spotify account. Playback is read for the selected Spotify account only, so the selected account must be the one currently playing music.
 
@@ -294,7 +294,7 @@ Playback controls generally require a Spotify Premium account and an active cont
 
 - `/api/auth/login` — starts Spotify authorization
 - `/api/auth/callback` — exchanges the authorization code and creates a pairing code
-- `/api/auth/pair` — lists saved profiles (`GET`), claims a one-time pairing code, or selects a profile (`POST`)
+- `/api/auth/pair` — lists saved profiles (`GET`), claims a one-time pairing code, selects a profile, or removes a saved profile (`POST`)
 - `/api/auth/logout` — clears the session cookie
 - `/api/spotify/currently-playing` — returns playback state (no Redis access)
 - `/api/spotify/command` — allowlisted play, pause, next, previous, and play_artist (artist radio) commands

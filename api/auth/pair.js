@@ -1,7 +1,7 @@
 var lib = require('../_lib');
 function refreshProfileMetadata(req, profiles, session, callback) {
   var pending = profiles.filter(function (profile) {
-    return profile && typeof profile.refresh_token === 'string' && !profile.profile_metadata_checked;
+    return profile && typeof profile.refresh_token === 'string' && profile.profile_metadata_version !== 2;
   });
   var changed = false, sessionChanged = false, sessionTokenChanged = false, warningCount = 0, index = 0, cfg = lib.config(req);
   function next() {
@@ -35,7 +35,7 @@ function refreshProfileMetadata(req, profiles, session, callback) {
           session.user_id = details.user_id;
           sessionChanged = true;
         }
-        profile.profile_metadata_checked = true;
+        profile.profile_metadata_version = 2;
         changed = true;
         next();
       });
@@ -133,6 +133,38 @@ function selectProfile(req, res, body) {
     lib.json(res, 200, { selected: lib.publicProfile(selected) });
   });
 }
+function removeProfile(req, res, body) {
+  if (lib.memoryRateLimit(req, 'remove-profile', 20, 60)) return lib.json(res, 429, { error: 'Too many profile changes. Try again shortly.' });
+  var id = body && typeof body.remove_profile_id === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(body.remove_profile_id) ? body.remove_profile_id : null;
+  if (!id) return lib.json(res, 400, { error: 'Choose a valid Spotify profile to remove.' });
+  var storeId = lib.profileStoreId(req);
+  if (!storeId) return lib.json(res, 401, { error: 'No profiles are saved on this installation.' });
+  lib.getSession(req, res, function (sessionErr, session) {
+    if (sessionErr) return lib.json(res, 503, { error: 'Could not load the current Spotify session.' });
+    lib.getProfileStore(storeId, function (profileErr, profiles) {
+      if (profileErr) return lib.json(res, 503, { error: 'Could not load saved Spotify profiles.' });
+      var index = -1;
+      for (var i = 0; i < profiles.length; i++) {
+        if (profiles[i] && profiles[i].id === id) {
+          index = i;
+          break;
+        }
+      }
+      if (index === -1) return lib.json(res, 404, { error: 'That Spotify profile is no longer available.' });
+      profiles.splice(index, 1);
+      lib.saveProfileStore(storeId, profiles, function (saveErr) {
+        if (saveErr) return lib.json(res, 503, { error: 'Could not remove this Spotify profile.' });
+        if (session && session.profile_id === id) lib.clearCookie(res, 'spotify_session');
+        lib.json(res, 200, {
+          removed: true,
+          profiles: profiles.filter(function (profile) {
+            return profile && typeof profile.id === 'string' && typeof profile.refresh_token === 'string';
+          }).map(lib.publicProfile)
+        });
+      });
+    });
+  });
+}
 function addProfile(req, res, body) {
   var code = body && body.code;
   code = String(code || '').replace(/[^a-z0-9]/ig, '').toUpperCase();
@@ -164,7 +196,7 @@ function addProfile(req, res, body) {
                 user_id: record.user_id || null,
                 display_name: record.display_name || null,
                 avatar_url: record.avatar_url || null,
-                profile_metadata_checked: !!record.profile_metadata_checked,
+                profile_metadata_version: record.profile_metadata_version || 0,
                 refresh_token: record.refresh_token
               });
               if (currentSession && currentSession.profile_id === profile.id) {
@@ -207,6 +239,7 @@ module.exports = function (req, res) {
     var body;
     try { body = JSON.parse(raw); } catch (e) {}
     if (body && body.profile_id !== undefined) return selectProfile(req, res, body);
+    if (body && body.remove_profile_id !== undefined) return removeProfile(req, res, body);
     lib.rateLimit(req, 'pair', 12, 600, function (limitErr, limited) {
       if (limitErr) return lib.json(res, 503, { error: 'Rate-limit storage is unavailable.' });
       if (limited) return lib.json(res, 429, { error: 'Too many pairing attempts. Try again later.' });

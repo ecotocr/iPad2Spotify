@@ -103,8 +103,8 @@ test('profile listing refreshes missing Spotify account name and avatar metadata
   assert.strictEqual(saved.profiles[0].refresh_token, 'rotated-refresh-token');
   assert.strictEqual(saved.profiles[1].refresh_token, 'rotated-second-refresh-token');
   assert.strictEqual(saved.profiles[1].id, 'opaque-profile-id');
-  assert.strictEqual(saved.profiles[0].profile_metadata_checked, true);
-  assert.strictEqual(saved.profiles[1].profile_metadata_checked, true);
+  assert.strictEqual(saved.profiles[0].profile_metadata_version, 2);
+  assert.strictEqual(saved.profiles[1].profile_metadata_version, 2);
   var sessionCookie = setCookieValues(res).filter(function (value) { return /^spotify_session=/.test(value); })[0];
   var activeSession = lib.openSession(decodeURIComponent(sessionCookie.split(';')[0].split('=').slice(1).join('=')));
   assert.strictEqual(activeSession.profile_id, 'opaque-profile-id');
@@ -144,6 +144,55 @@ test('profile selection rejects IDs that are not in the installation store', fun
   pair(helpers.fakeReq('POST', '/api/auth/pair', 'spotify_profile_store=' + lib.random(32), { profile_id: 'missing' }), res);
   restore();
   assert.strictEqual(res.statusCode, 404);
+});
+
+test('removing a profile deletes only that profile and does not expose its refresh token', function (t, done) {
+  var storeId = lib.random(32), saved = null;
+  var profiles = [
+    { id: 'keep-user', user_id: 'keep-user', display_name: 'Keep', refresh_token: 'keep-refresh-token' },
+    { id: 'remove-user', user_id: 'remove-user', display_name: 'Remove', refresh_token: 'remove-refresh-token' }
+  ];
+  var restore = stubLib({
+    memoryRateLimit: function () { return false; },
+    kvGet: function (key, cb) {
+      if (key === 'profiles:' + storeId) return cb(null, { profiles: profiles });
+      cb(null, null);
+    },
+    kvSet: function (key, value, seconds, cb) { saved = value; cb(null); }
+  });
+  var res = helpers.fakeRes();
+  pair(helpers.fakeReq('POST', '/api/auth/pair', 'spotify_profile_store=' + storeId, { remove_profile_id: 'remove-user' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(helpers.resBody(res).removed, true);
+    assert.deepStrictEqual(helpers.resBody(res).profiles.map(function (profile) { return profile.id; }), ['keep-user']);
+    assert.strictEqual(saved.profiles.length, 1);
+    assert.strictEqual(saved.profiles[0].refresh_token, 'keep-refresh-token');
+    assert.doesNotMatch(JSON.stringify(helpers.resBody(res)), /keep-refresh-token|remove-refresh-token/);
+    done();
+  });
+});
+
+test('removing the selected profile also clears its active session cookie', function (t, done) {
+  var storeId = lib.random(32);
+  var cookie = 'spotify_profile_store=' + storeId + '; spotify_session=' + lib.sealSession({
+    profile_id: 'remove-user', refresh_token: 'remove-refresh-token'
+  });
+  var restore = stubLib({
+    memoryRateLimit: function () { return false; },
+    kvGet: function (key, cb) { cb(null, { profiles: [{ id: 'remove-user', refresh_token: 'remove-refresh-token' }] }); },
+    kvSet: function (key, value, seconds, cb) { cb(null); }
+  });
+  var res = helpers.fakeRes();
+  pair(helpers.fakeReq('POST', '/api/auth/pair', cookie, { remove_profile_id: 'remove-user' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    var cookies = setCookieValues(res);
+    assert.ok(cookies.some(function (value) { return /^spotify_session=; Max-Age=0/.test(value); }));
+    done();
+  });
 });
 
 test('updating an existing Spotify user preserves the profile ID used by sessions', function () {

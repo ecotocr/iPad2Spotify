@@ -2,7 +2,7 @@ var crypto = require('crypto');
 var kv = require('./_kv');
 
 function securityHeaders(res) {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co https://image-cdn-ak.spotifycdn.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -92,11 +92,14 @@ function setProfileStore(res, storeId, secure) {
 }
 function profileKey(storeId) { return 'profiles:' + storeId; }
 function createProfileId(userId) { return badgeId(userId) || random(18); }
+function isSpotifyImageUrl(value) {
+  return typeof value === 'string' && /^https:\/\/(?:i\.scdn\.co|image-cdn-ak\.spotifycdn\.com)\//.test(value);
+}
 function publicProfile(profile) {
   return {
     id: profile.id,
     display_name: typeof profile.display_name === 'string' && profile.display_name ? profile.display_name : 'Spotify account',
-    avatar_url: typeof profile.avatar_url === 'string' && /^https:\/\/i\.scdn\.co\//.test(profile.avatar_url) ? profile.avatar_url : null,
+    avatar_url: isSpotifyImageUrl(profile.avatar_url) ? profile.avatar_url : null,
     user_id: profile.user_id || null
   };
 }
@@ -111,10 +114,10 @@ function upsertProfile(profiles, profile) {
   if (existing) {
     existing.refresh_token = profile.refresh_token;
     if (profile.user_id) existing.user_id = profile.user_id;
-    if (profile.profile_metadata_checked) {
+    if (profile.profile_metadata_version) {
       existing.display_name = profile.display_name || null;
       existing.avatar_url = profile.avatar_url || null;
-      existing.profile_metadata_checked = true;
+      existing.profile_metadata_version = profile.profile_metadata_version;
     } else {
       if (profile.display_name) existing.display_name = profile.display_name;
       if (profile.avatar_url) existing.avatar_url = profile.avatar_url;
@@ -212,7 +215,7 @@ function spotifyUserProfile(accessToken, callback) {
     var avatar = null;
     if (Array.isArray(data.images)) {
       for (var i = 0; i < data.images.length; i++) {
-        if (data.images[i] && typeof data.images[i].url === 'string' && /^https:\/\/i\.scdn\.co\//.test(data.images[i].url)) {
+        if (data.images[i] && isSpotifyImageUrl(data.images[i].url)) {
           avatar = data.images[i].url;
           break;
         }

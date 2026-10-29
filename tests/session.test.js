@@ -96,14 +96,17 @@ test('a pending profile token update is retried when Spotify does not rotate aga
   });
 });
 
-test('Spotify profile lookup returns a validated display name and CDN avatar', function (t, done) {
+test('Spotify profile lookup accepts Spotify profile-image CDN hosts only', function (t, done) {
   var restore = stubLib({
     request: function (url, options, cb) {
       assert.strictEqual(url, 'https://api.spotify.com/v1/me');
       cb(null, 200, {
         id: 'SpotifyUser',
         display_name: 'Spotify Name',
-        images: [{ url: 'https://i.scdn.co/image/avatar' }, { url: 'https://example.test/other' }]
+        images: [
+          { url: 'https://image-cdn-ak.spotifycdn.com/image/avatar' },
+          { url: 'https://example.test/other' }
+        ]
       });
     }
   });
@@ -113,7 +116,7 @@ test('Spotify profile lookup returns a validated display name and CDN avatar', f
     assert.deepStrictEqual(profile, {
       user_id: 'SpotifyUser',
       display_name: 'Spotify Name',
-      avatar_url: 'https://i.scdn.co/image/avatar'
+      avatar_url: 'https://image-cdn-ak.spotifycdn.com/image/avatar'
     });
     done();
   });
