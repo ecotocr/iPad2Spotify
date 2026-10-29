@@ -96,6 +96,23 @@ test('proxies a known action to the matching Spotify endpoint', function (t, don
   });
 });
 
+test('restarts playback by seeking to zero', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) { calledWith = { url: url, options: options }; cb(null, 204, null); }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'restart' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/seek?position_ms=0');
+    assert.strictEqual(calledWith.options.method, 'PUT');
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
 test('starts artist radio with a valid artist id via context_uri', function (t, done) {
   var calledWith = null;
   var restore = stubLib({

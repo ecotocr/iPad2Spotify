@@ -252,9 +252,11 @@ The dashboard provides:
 - Search Playlist to find Spotify playlists and start a selected playlist,
 - Winamp Mode, a Winamp 2.x-style remote control with a playback-driven visualizer.
 
-The regular player also has a **Minimalist View** button. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. Tap the album cover to open the **Exit minimalist view?** confirmation. Select **yes** to return to the regular player or **no** to continue viewing the minimalist display.
+The regular player also has a **Minimalist View** button. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. A single tap toggles between artwork and lyrics; double-tap the artwork or lyrics to return to the regular player.
 
-In the regular player, tap the album artwork to switch between the cover and lyrics; tap again to return to the artwork. Lyrics are looked up on demand from the lyrics.ovh API using the current artist and track title. Availability depends on the upstream catalog. The API returns plain lyrics, not timestamped lines, so lyrics do not scroll in sync with playback. In Minimalist View, tapping the cover keeps its existing exit-confirmation behavior.
+In the regular player, tap the album artwork to switch to lyrics and use the **Album artwork** button to return. The lyrics panel expands alongside the player details, and its text can be scrolled when needed. If the track changes while lyrics are displayed, the lyrics remain open and update for the new track. Lyrics are looked up on demand from the lyrics.ovh API using the current artist and track title. Availability depends on the upstream catalog. The API returns plain lyrics, not timestamped lines, so lyrics do not scroll in sync with playback.
+
+The Previous control follows Spotify's usual timing behavior: at 3 seconds or earlier it skips to the previous track; after 3 seconds it restarts the current track.
 
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
 

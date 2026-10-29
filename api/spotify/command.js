@@ -1,5 +1,5 @@
 var lib = require('../_lib');
-var paths = { play: ['PUT', '/me/player/play'], pause: ['PUT', '/me/player/pause'], next: ['POST', '/me/player/next'], previous: ['POST', '/me/player/previous'] };
+var paths = { play: ['PUT', '/me/player/play'], pause: ['PUT', '/me/player/pause'], next: ['POST', '/me/player/next'], previous: ['POST', '/me/player/previous'], restart: ['PUT', '/me/player/seek?position_ms=0'] };
 function idFrom(body, key) {
   return body && typeof body[key] === 'string' && /^[A-Za-z0-9]{10,30}$/.test(body[key]) ? body[key] : null;
 }
@@ -49,4 +49,3 @@ module.exports = function (req, res) {
     }); });
   });
 };
-
