@@ -21,10 +21,12 @@ module.exports = function (req, res) {
       // Sessions paired before account IDs were recorded: look the ID up once and remember it in the cookie.
       lib.spotifyToken(lib.config(req), 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) {
         if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
-        lib.updateRefreshToken(res, session, token);
+        lib.updateRefreshToken(res, session, token, function (profileSaveErr) {
+        if (profileSaveErr) return lib.json(res, 503, { error: 'Could not save refreshed Spotify profile credentials.' });
         lib.spotifyUserId(token.access_token, function (userId) {
           if (userId) { session.user_id = userId; lib.setSession(res, session); }
           save(userId);
+        });
         });
       });
     });

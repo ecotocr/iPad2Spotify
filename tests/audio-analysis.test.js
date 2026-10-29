@@ -18,7 +18,7 @@ function callWithSegments(segments, options) {
     config: function () { return {}; },
     memoryRateLimit: function (req, bucket, limit, seconds) { count('rateLimit'); return !!options.limited; },
     spotifyToken: function (cfg, body, callback) { count('token'); callback(null, 200, { access_token: 'access-token' }); },
-    updateRefreshToken: function () {},
+    updateRefreshToken: function (res, session, token, callback) { callback(null); },
     kvGet: function (key, callback) {
       count('cache');
       if (options.cached) callback(null, options.cached);

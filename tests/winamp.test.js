@@ -134,6 +134,10 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(html, /id="disconnect-modal"/);
   assert.match(html, /id="minimalist-exit"/);
   assert.match(html, /id="devices"[^>]*aria-label="Spotify playback devices"/);
+  assert.match(html, /id="profiles" class="profile-picker"/);
+  assert.match(html, /id="profile-list"/);
+  assert.match(html, /id="add-profile"/);
+  assert.match(html, /id="player" class="player hidden"/);
   assert.match(html, /id="volume-slider"[^>]*type="range"/);
   assert.match(html, /id="volume-message"/);
   assert.match(html, /id="devices-modal"/);
@@ -149,6 +153,8 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(css, /refresh-spin/);
   assert.match(css, /\.connection-tools #status\{display:inline-block/);
   assert.match(css, /\.details h2\{font-family:Arial,"Helvetica Neue",sans-serif;font-size:39px/);
+  assert.match(css, /\.profile-avatar img\{position:absolute/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /document\.getElementsByClassName\('site-title'\)\[0\]\.onclick=returnToProfiles/);
   assert.match(css, /\.volume-adjustment\{display:-webkit-box;display:-webkit-flex;display:flex/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));

@@ -41,7 +41,8 @@ module.exports = function (req, res) {
     if (isDeviceTransfer && !transferDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
     if (!isArtist && !isPlaylist && !target) return lib.json(res, 400, { error: 'Unknown playback command.' });
     lib.getSession(req, res, function (err, session) { if (err || !session) return lib.json(res, 401, { error: 'Session expired. Pair again.' }); var cfg = lib.config(req); lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) { if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired.' });
-      lib.updateRefreshToken(res, session, token);
+      lib.updateRefreshToken(res, session, token, function (saveErr) {
+      if (saveErr) return lib.json(res, 503, { error: 'Could not save refreshed Spotify profile credentials.' });
       function sendCommand(deviceId) {
         var method = (isArtist || isPlaylist) ? 'PUT' : target[0];
         var path = (isArtist || isPlaylist) ? '/me/player/play' : target[1];
@@ -63,6 +64,7 @@ module.exports = function (req, res) {
       if (isDeviceTransfer) sendCommand(null);
       else if (isVolume && volumeDeviceId) sendCommand(volumeDeviceId);
       else findDeviceId(token.access_token, sendCommand);
+      });
     }); });
   });
 };

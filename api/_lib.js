@@ -25,7 +25,10 @@ function cookie(req, name) {
 function setCookie(res, name, value, maxAge, secure) {
   var attrs = name + '=' + encodeURIComponent(value) + '; Max-Age=' + maxAge + '; Path=/; HttpOnly; SameSite=Lax';
   if (secure !== false) attrs += '; Secure';
-  res.setHeader('Set-Cookie', attrs);
+  var current = typeof res.getHeader === 'function' ? res.getHeader('Set-Cookie') : res.headers && res.headers['Set-Cookie'];
+  var cookies = current ? (Array.isArray(current) ? current.slice() : [current]) : [];
+  cookies.push(attrs);
+  res.setHeader('Set-Cookie', cookies.length === 1 ? cookies[0] : cookies);
 }
 function clearCookie(res, name) { setCookie(res, name, '', 0); }
 function clientIp(req) { var forwarded = req.headers['x-forwarded-for']; return (forwarded ? forwarded.split(',')[0] : (req.headers['x-real-ip'] || 'unknown')).trim(); }
@@ -44,6 +47,8 @@ function memoryRateLimit(req, bucket, limit, seconds) {
   return entry.count > limit;
 }
 var SESSION_COOKIE = 'spotify_session', SESSION_MAX_AGE = 2592000;
+var PROFILE_STORE_COOKIE = 'spotify_profile_store', PROFILE_STORE_MAX_AGE = 31536000;
+var PROFILE_STORE_TTL = 31536000;
 function sessionKey() {
   var secret = process.env.SESSION_SECRET || process.env.SPOTIFY_CLIENT_SECRET;
   if (!secret) return null;
@@ -53,7 +58,11 @@ function sealSession(session) {
   var key = sessionKey();
   if (!key) return null;
   var iv = crypto.randomBytes(12), cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  var data = Buffer.concat([cipher.update(JSON.stringify(session.user_id ? { refresh_token: session.refresh_token, user_id: session.user_id } : { refresh_token: session.refresh_token }), 'utf8'), cipher.final()]);
+  var stored = { refresh_token: session.refresh_token };
+  if (session.user_id) stored.user_id = session.user_id;
+  if (session.profile_id) stored.profile_id = session.profile_id;
+  if (session.profile_sync_pending) stored.profile_sync_pending = true;
+  var data = Buffer.concat([cipher.update(JSON.stringify(stored), 'utf8'), cipher.final()]);
   return 'v1.' + base64Url(Buffer.concat([iv, cipher.getAuthTag(), data]));
 }
 function openSession(value) {
@@ -74,6 +83,59 @@ function setSession(res, session, secure) {
   setCookie(res, SESSION_COOKIE, sealed, SESSION_MAX_AGE, secure);
   return true;
 }
+function profileStoreId(req) {
+  var id = cookie(req, PROFILE_STORE_COOKIE);
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{43}$/.test(id) ? id : null;
+}
+function setProfileStore(res, storeId, secure) {
+  setCookie(res, PROFILE_STORE_COOKIE, storeId, PROFILE_STORE_MAX_AGE, secure);
+}
+function profileKey(storeId) { return 'profiles:' + storeId; }
+function createProfileId(userId) { return badgeId(userId) || random(18); }
+function publicProfile(profile) {
+  return {
+    id: profile.id,
+    display_name: typeof profile.display_name === 'string' && profile.display_name ? profile.display_name : (profile.user_id || 'Spotify account'),
+    avatar_url: typeof profile.avatar_url === 'string' && /^https:\/\/i\.scdn\.co\//.test(profile.avatar_url) ? profile.avatar_url : null,
+    user_id: profile.user_id || null
+  };
+}
+function upsertProfile(profiles, profile) {
+  var existing = null;
+  for (var i = 0; i < profiles.length; i++) {
+    if (profiles[i].id === profile.id || (profile.user_id && profiles[i].user_id === profile.user_id)) {
+      existing = profiles[i];
+      break;
+    }
+  }
+  if (existing) {
+    existing.id = profile.id;
+    existing.refresh_token = profile.refresh_token;
+    if (profile.user_id) existing.user_id = profile.user_id;
+    if (profile.display_name) existing.display_name = profile.display_name;
+    if (profile.avatar_url) existing.avatar_url = profile.avatar_url;
+    return existing;
+  }
+  profiles.push(profile);
+  return profile;
+}
+function getProfileStore(storeId, callback) {
+  module.exports.kvGet(profileKey(storeId), function (err, stored) {
+    if (err) return callback(err);
+    var profiles = stored && Array.isArray(stored.profiles) ? stored.profiles : [];
+    callback(null, profiles);
+  });
+}
+function saveProfileStore(storeId, profiles, callback) {
+  module.exports.kvSet(profileKey(storeId), { profiles: profiles }, PROFILE_STORE_TTL, callback);
+}
+function ensureProfileStore(req, res, callback) {
+  var existing = profileStoreId(req);
+  if (existing) return callback(null, existing);
+  var storeId = random(32);
+  setProfileStore(res, storeId, !isLocalHost(req));
+  callback(null, storeId);
+}
 function isLegacySessionId(value) { return typeof value === 'string' && /^[A-Za-z0-9_-]{20,64}$/.test(value); }
 // Reads the session from the encrypted cookie without Redis. Sessions created before the
 // cookie migration are looked up in Redis once, re-issued as encrypted cookies, then left to expire.
@@ -81,7 +143,10 @@ function getSession(req, res, callback) {
   var value = cookie(req, SESSION_COOKIE);
   if (!value) return callback(null, null);
   var session = openSession(value);
-  if (session) return callback(null, session);
+  if (session) {
+    session.profile_store_id = profileStoreId(req);
+    return callback(null, session);
+  }
   if (!isLegacySessionId(value)) return callback(null, null);
   // A genuine legacy cookie migrates on its first lookup; cap forged ones so they can't drive Redis traffic.
   if (module.exports.memoryRateLimit(req, 'legacy-session', 5, 3600)) return callback(null, null);
@@ -90,15 +155,40 @@ function getSession(req, res, callback) {
     if (!legacy || !legacy.refresh_token) return callback(null, null);
     // The legacy key is left to expire on its own so pre-migration badges can still resolve it.
     module.exports.setSession(res, legacy);
+    legacy.profile_store_id = profileStoreId(req);
     callback(null, legacy);
   });
 }
 // Spotify may rotate refresh tokens; keep the cookie in sync when it does.
-function updateRefreshToken(res, session, token) {
-  if (token && token.refresh_token && token.refresh_token !== session.refresh_token) {
-    session.refresh_token = token.refresh_token;
-    module.exports.setSession(res, session);
+function updateRefreshToken(res, session, token, callback) {
+  var changed = token && token.refresh_token && token.refresh_token !== session.refresh_token;
+  if (changed) session.refresh_token = token.refresh_token;
+  if (changed && session.profile_store_id && session.profile_id) session.profile_sync_pending = true;
+  if (!session.profile_store_id || !session.profile_id || !session.profile_sync_pending) {
+    if (changed) module.exports.setSession(res, session);
+    return callback ? callback(null) : undefined;
   }
+  function finish(err) {
+    if (err) session.profile_sync_pending = true;
+    else delete session.profile_sync_pending;
+    module.exports.setSession(res, session);
+    if (callback) callback(err || null);
+  }
+  module.exports.getProfileStore(session.profile_store_id, function (readErr, profiles) {
+    if (readErr) return finish(readErr);
+    var found = false;
+    for (var i = 0; i < profiles.length; i++) {
+      if (profiles[i].id === session.profile_id) {
+        if (profiles[i].refresh_token === session.refresh_token) return finish(null);
+        profiles[i].refresh_token = session.refresh_token;
+        if (session.user_id) profiles[i].user_id = session.user_id;
+        found = true;
+        break;
+      }
+    }
+    if (!found) return finish(new Error('Selected Spotify profile is missing from this installation.'));
+    module.exports.saveProfileStore(session.profile_store_id, profiles, finish);
+  });
 }
 // Spotify user IDs are numeric, base62, or legacy usernames; they double as the stable badge key.
 function badgeId(userId) {
@@ -108,6 +198,25 @@ function badgeId(userId) {
 function spotifyUserId(accessToken, callback) {
   module.exports.request('https://api.spotify.com/v1/me', { headers: { Authorization: 'Bearer ' + accessToken }, timeout: 10000 }, function (err, status, data) {
     callback(!err && status === 200 && data && badgeId(data.id) ? data.id : null);
+  });
+}
+function spotifyUserProfile(accessToken, callback) {
+  module.exports.request('https://api.spotify.com/v1/me', { headers: { Authorization: 'Bearer ' + accessToken }, timeout: 10000 }, function (err, status, data) {
+    if (err || status !== 200 || !data || !badgeId(data.id)) return callback(null);
+    var avatar = null;
+    if (Array.isArray(data.images)) {
+      for (var i = 0; i < data.images.length; i++) {
+        if (data.images[i] && typeof data.images[i].url === 'string' && /^https:\/\/i\.scdn\.co\//.test(data.images[i].url)) {
+          avatar = data.images[i].url;
+          break;
+        }
+      }
+    }
+    callback({
+      user_id: data.id,
+      display_name: typeof data.display_name === 'string' && data.display_name ? data.display_name.slice(0, 100) : data.id,
+      avatar_url: avatar
+    });
   });
 }
 function base64Url(value) { return value.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_'); }
@@ -170,4 +279,4 @@ function requestBuffer(url, options, callback) {
   req.setTimeout(120000, function () { req.destroy(new Error('Upstream request timed out.')); });
   req.end();
 }
-module.exports = { json: json, readBody: readBody, cookie: cookie, setCookie: setCookie, clearCookie: clearCookie, clientIp: clientIp, rateLimit: rateLimit, memoryRateLimit: memoryRateLimit, sealSession: sealSession, openSession: openSession, setSession: setSession, getSession: getSession, isLegacySessionId: isLegacySessionId, updateRefreshToken: updateRefreshToken, badgeId: badgeId, spotifyUserId: spotifyUserId, random: random, pairingCode: pairingCode, redirect: redirect, config: config, origin: origin, isLocalHost: isLocalHost, request: request, requestBuffer: requestBuffer, spotifyToken: spotifyToken, kvSet: kv.kvSet, kvGet: kv.kvGet, kvDel: kv.kvDel };
+module.exports = { json: json, readBody: readBody, cookie: cookie, setCookie: setCookie, clearCookie: clearCookie, clientIp: clientIp, rateLimit: rateLimit, memoryRateLimit: memoryRateLimit, sealSession: sealSession, openSession: openSession, setSession: setSession, getSession: getSession, isLegacySessionId: isLegacySessionId, updateRefreshToken: updateRefreshToken, badgeId: badgeId, spotifyUserId: spotifyUserId, spotifyUserProfile: spotifyUserProfile, profileStoreId: profileStoreId, setProfileStore: setProfileStore, profileKey: profileKey, createProfileId: createProfileId, publicProfile: publicProfile, upsertProfile: upsertProfile, getProfileStore: getProfileStore, saveProfileStore: saveProfileStore, ensureProfileStore: ensureProfileStore, PROFILE_STORE_TTL: PROFILE_STORE_TTL, random: random, pairingCode: pairingCode, redirect: redirect, config: config, origin: origin, isLocalHost: isLocalHost, request: request, requestBuffer: requestBuffer, spotifyToken: spotifyToken, kvSet: kv.kvSet, kvGet: kv.kvGet, kvDel: kv.kvDel };

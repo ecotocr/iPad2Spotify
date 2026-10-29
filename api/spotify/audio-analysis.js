@@ -161,7 +161,8 @@ module.exports = function(req, res) {
       var cfg = lib.config(req);
       lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function(tokenErr, tokenStatus, token) {
         if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
-        lib.updateRefreshToken(res, session, token);
+        lib.updateRefreshToken(res, session, token, function(profileSaveErr) {
+        if (profileSaveErr) return lib.json(res, 503, { error: 'Could not save refreshed Spotify profile credentials.' });
         lib.request('https://api.spotify.com/v1/audio-analysis/' + trackId, { headers: { Authorization: 'Bearer ' + token.access_token } }, function(apiErr, status, data) {
           if (apiErr) return lib.json(res, 502, { error: 'Spotify Audio Analysis fetch failed.' });
           if (status !== 200) return lib.json(res, status, data || { error: 'Spotify request failed.' });
@@ -174,6 +175,7 @@ module.exports = function(req, res) {
             res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
             lib.json(res, 200, payload);
           });
+        });
         });
       });
     });

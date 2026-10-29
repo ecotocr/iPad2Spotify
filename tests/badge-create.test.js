@@ -75,7 +75,9 @@ test('re-pairing refreshes an existing account badge so its URL keeps working', 
   setImmediate(function () {
     restore();
     assert.strictEqual(res.statusCode, 200);
-    assert.deepStrictEqual(writes, [{ key: 'badge:1170009226', value: { refresh_token: 'new-rt', user_id: '1170009226' } }]);
+    var badgeWrite = writes.filter(function (entry) { return entry.key === 'badge:1170009226'; })[0];
+    assert.deepStrictEqual(badgeWrite, { key: 'badge:1170009226', value: { refresh_token: 'new-rt', user_id: '1170009226' } });
+    assert.ok(writes.some(function (entry) { return /^profiles:/.test(entry.key); }));
     done();
   });
 });
@@ -86,7 +88,10 @@ test('pairing does not create a badge for accounts that never opted in', functio
     rateLimit: notLimited,
     kvGet: function (key, cb) { cb(null, key === 'pair:' + code ? { refresh_token: 'rt', user_id: 'someone', expires: Date.now() + 60000 } : null); },
     kvDel: function (key, cb) { cb(null); },
-    kvSet: function () { throw new Error('must not create a badge'); }
+    kvSet: function (key, value, seconds, cb) {
+      if (key.indexOf('profiles:') === 0) return cb(null);
+      throw new Error('must not create a badge');
+    }
   });
   var res = helpers.fakeRes();
   pair(helpers.fakeReq('POST', '/api/auth/pair', null, { code: code }), res);

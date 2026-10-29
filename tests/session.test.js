@@ -21,10 +21,18 @@ test('sealed sessions round-trip without exposing the refresh token', function (
   assert.strictEqual(lib.openSession(sealed).refresh_token, 'secret-refresh-token');
 });
 
+test('sealed sessions preserve the selected profile without storing installation identifiers', function () {
+  var sealed = lib.sealSession({ refresh_token: 'rt', user_id: 'user-id', profile_id: 'profile-id', profile_store_id: 'installation-id' });
+  var session = lib.openSession(sealed);
+  assert.strictEqual(session.profile_id, 'profile-id');
+  assert.strictEqual(session.profile_store_id, undefined);
+  assert.doesNotMatch(sealed, /installation-id/);
+});
+
 test('tampered or foreign session cookies are rejected', function () {
   var sealed = lib.sealSession({ refresh_token: 'rt' });
-  var last = sealed.charAt(sealed.length - 1);
-  assert.strictEqual(lib.openSession(sealed.slice(0, -1) + (last === 'A' ? 'B' : 'A')), null);
+  var tampered = sealed.charAt(3) === 'A' ? 'B' : 'A';
+  assert.strictEqual(lib.openSession(sealed.slice(0, 3) + tampered + sealed.slice(4)), null);
   assert.strictEqual(lib.openSession('v1.garbage'), null);
   var original = process.env.SESSION_SECRET;
   process.env.SESSION_SECRET = 'a-different-secret';
@@ -40,6 +48,72 @@ test('getSession reads encrypted cookies without Redis', function (t, done) {
     restore();
     assert.ifError(err);
     assert.strictEqual(session.refresh_token, 'rt');
+    done();
+  });
+});
+
+test('rotated refresh tokens are saved in the selected profile record', function (t, done) {
+  var storeId = lib.random(32), saved = null;
+  var req = helpers.fakeReq('GET', '/', 'spotify_session=' + lib.sealSession({ refresh_token: 'old-rt', user_id: 'user-id', profile_id: 'user-id' }) + '; spotify_profile_store=' + storeId);
+  var restore = stubLib({
+    kvGet: function (key, cb) {
+      assert.strictEqual(key, 'profiles:' + storeId);
+      cb(null, { profiles: [{ id: 'user-id', user_id: 'user-id', refresh_token: 'old-rt' }] });
+    },
+    kvSet: function (key, value, seconds, cb) { saved = value; cb(null); }
+  });
+  var res = helpers.fakeRes();
+  lib.getSession(req, res, function (err, session) {
+    assert.ifError(err);
+    lib.updateRefreshToken(res, session, { refresh_token: 'rotated-rt' }, function (saveErr) {
+      restore();
+      assert.ifError(saveErr);
+      assert.strictEqual(saved.profiles[0].refresh_token, 'rotated-rt');
+      assert.strictEqual(lib.openSession(decodeURIComponent(res.headers['Set-Cookie'].split(';')[0].split('=').slice(1).join('='))).refresh_token, 'rotated-rt');
+      done();
+    });
+  });
+});
+
+test('a pending profile token update is retried when Spotify does not rotate again', function (t, done) {
+  var storeId = lib.random(32), saved = null;
+  var session = { refresh_token: 'rotated-rt', profile_id: 'user-id', profile_store_id: storeId, profile_sync_pending: true, user_id: 'user-id' };
+  var restore = stubLib({
+    kvGet: function (key, cb) {
+      assert.strictEqual(key, 'profiles:' + storeId);
+      cb(null, { profiles: [{ id: 'user-id', user_id: 'user-id', refresh_token: 'old-rt' }] });
+    },
+    kvSet: function (key, value, seconds, cb) { saved = value; cb(null); }
+  });
+  var res = helpers.fakeRes();
+  lib.updateRefreshToken(res, session, { access_token: 'access-token' }, function (saveErr) {
+    restore();
+    assert.ifError(saveErr);
+    assert.strictEqual(saved.profiles[0].refresh_token, 'rotated-rt');
+    var sessionCookie = decodeURIComponent(res.headers['Set-Cookie'].split(';')[0].split('=').slice(1).join('='));
+    assert.strictEqual(lib.openSession(sessionCookie).profile_sync_pending, undefined);
+    done();
+  });
+});
+
+test('Spotify profile lookup returns a validated display name and CDN avatar', function (t, done) {
+  var restore = stubLib({
+    request: function (url, options, cb) {
+      assert.strictEqual(url, 'https://api.spotify.com/v1/me');
+      cb(null, 200, {
+        id: 'SpotifyUser',
+        display_name: 'Spotify Name',
+        images: [{ url: 'https://i.scdn.co/image/avatar' }, { url: 'https://example.test/other' }]
+      });
+    }
+  });
+  lib.spotifyUserProfile('access-token', function (profile) {
+    restore();
+    assert.deepStrictEqual(profile, {
+      user_id: 'SpotifyUser',
+      display_name: 'Spotify Name',
+      avatar_url: 'https://i.scdn.co/image/avatar'
+    });
     done();
   });
 });

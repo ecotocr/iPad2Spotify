@@ -35,7 +35,8 @@ module.exports = function (req, res) {
     var cfg = lib.config(req);
     lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) {
       if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
-      lib.updateRefreshToken(res, session, token);
+      lib.updateRefreshToken(res, session, token, function (saveErr) {
+      if (saveErr) return lib.json(res, 503, { error: 'Could not save refreshed Spotify profile credentials.' });
       if (devicesRequested) {
         var headers = { Authorization: 'Bearer ' + token.access_token };
         lib.request('https://api.spotify.com/v1/me/player/devices', { headers: headers }, function (devicesErr, devicesStatus, data) {
@@ -63,6 +64,7 @@ module.exports = function (req, res) {
         if (status === 204) return lib.json(res, 200, { item: null, is_playing: false });
         if (status !== 200) return lib.json(res, status, data || { error: 'Spotify request failed.' });
         lib.json(res, 200, data);
+      });
       });
     });
   });
