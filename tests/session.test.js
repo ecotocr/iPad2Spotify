@@ -153,6 +153,28 @@ test('Spotify profile lookup retries the public profile endpoint when the curren
   });
 });
 
+test('Spotify profile lookup retains Facebook-hosted profile images', function (t, done) {
+  var avatarUrl = 'https://platform-lookaside.fbsbx.com/platform/profilepic/test-avatar.jpg';
+  var restore = stubLib({
+    request: function (url, options, cb) {
+      assert.strictEqual(url, 'https://api.spotify.com/v1/me');
+      cb(null, 200, {
+        id: 'SpotifyUser',
+        display_name: 'Spotify Name',
+        images: [{ url: avatarUrl }]
+      });
+    }
+  });
+  lib.spotifyUserProfile('access-token', function (err, profile) {
+    restore();
+    assert.ifError(err);
+    assert.strictEqual(profile.avatar_url, avatarUrl);
+    assert.strictEqual(lib.isProfileImageUrl(avatarUrl), true);
+    assert.strictEqual(lib.isSpotifyImageUrl(avatarUrl), false);
+    done();
+  });
+});
+
 test('Spotify profile lookup reports failures instead of silently returning no profile', function (t, done) {
   var restore = stubLib({
     request: function (url, options, cb) { cb(null, 403, { error: { status: 403, message: 'Insufficient client scope' } }); }

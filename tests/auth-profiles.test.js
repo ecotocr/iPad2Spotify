@@ -138,6 +138,17 @@ test('profile selection installs only the chosen profile as the active session',
   });
 });
 
+test('public profile output includes a Facebook-hosted profile photo URL', function () {
+  var avatarUrl = 'https://platform-lookaside.fbsbx.com/platform/profilepic/test-avatar.jpg';
+  var result = lib.publicProfile({
+    id: 'avatar-user',
+    user_id: 'avatar-user',
+    display_name: 'Esteban',
+    avatar_url: avatarUrl
+  });
+  assert.strictEqual(result.avatar_url, avatarUrl);
+});
+
 test('profile selection rejects IDs that are not in the installation store', function () {
   var restore = stubLib({ kvGet: function (key, cb) { cb(null, { profiles: [] }); } });
   var res = helpers.fakeRes();
@@ -242,6 +253,33 @@ test('profile avatar route fetches Spotify profile-images CDN URLs', function (t
     restore();
     assert.strictEqual(res.statusCode, 200);
     assert.strictEqual(requestedUrl, 'https://profile-images.scdn.co/profile/avatar');
+    done();
+  });
+});
+
+test('profile avatar route proxies Facebook-hosted Spotify profile photos', function (t, done) {
+  var storeId = lib.random(32), requestedUrl = null;
+  var avatarUrl = 'https://platform-lookaside.fbsbx.com/platform/profilepic/test-avatar.jpg';
+  var restore = stubLib({
+    kvGet: function (key, cb) {
+      cb(null, { profiles: [{ id: 'avatar-user', avatar_url: avatarUrl, refresh_token: 'private-token' }] });
+    },
+    requestBuffer: function (url, options, cb) {
+      requestedUrl = url;
+      cb(null, 200, Buffer.from('JPEG-DATA'), { 'content-type': 'image/jpeg', 'content-disposition': 'attachment' });
+    }
+  });
+  var req = helpers.fakeReq('GET', '/api/auth/pair?avatar=avatar-user', 'spotify_profile_store=' + storeId);
+  req.query = { avatar: 'avatar-user' };
+  var res = helpers.fakeRes();
+  pair(req, res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(requestedUrl, avatarUrl);
+    assert.strictEqual(res.headers['Content-Type'], 'image/jpeg');
+    assert.strictEqual(res.headers['Content-Disposition'], undefined);
+    assert.deepStrictEqual(res.body, Buffer.from('JPEG-DATA'));
     done();
   });
 });

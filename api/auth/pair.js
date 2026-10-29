@@ -189,7 +189,7 @@ function serveProfileAvatar(req, res) {
         break;
       }
     }
-    if (!profile || !lib.isSpotifyImageUrl(profile.avatar_url)) return lib.json(res, 404, { error: 'No Spotify profile image is available.' });
+    if (!profile || !lib.isProfileImageUrl(profile.avatar_url)) return lib.json(res, 404, { error: 'No Spotify profile image is available.' });
     function fetchImage(imageUrl, redirects) {
       lib.requestBuffer(imageUrl, {
         headers: { Accept: 'image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1' }
@@ -201,7 +201,7 @@ function serveProfileAvatar(req, res) {
           try { nextUrl = new (require('url').URL)(headers.location, imageUrl).toString(); } catch (e) {
             return lib.json(res, 502, { error: 'Spotify returned an invalid profile image redirect.' });
           }
-          if (!lib.isSpotifyImageUrl(nextUrl)) return lib.json(res, 502, { error: 'Spotify redirected the profile image to an unsupported host.' });
+          if (!lib.isProfileImageUrl(nextUrl)) return lib.json(res, 502, { error: 'Spotify redirected the profile image to an unsupported host.' });
           return fetchImage(nextUrl, redirects + 1);
         }
         if (status !== 200 || !image || !image.length) return lib.json(res, 502, { error: 'Could not load the Spotify profile image.' });

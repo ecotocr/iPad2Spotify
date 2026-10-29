@@ -95,11 +95,14 @@ function createProfileId(userId) { return badgeId(userId) || random(18); }
 function isSpotifyImageUrl(value) {
   return typeof value === 'string' && /^https:\/\/(?:(?:[a-z0-9-]+\.)*scdn\.co|(?:[a-z0-9-]+\.)*spotifycdn\.com)\//i.test(value);
 }
+function isProfileImageUrl(value) {
+  return isSpotifyImageUrl(value) || (typeof value === 'string' && /^https:\/\/platform-lookaside\.fbsbx\.com\//i.test(value));
+}
 function publicProfile(profile) {
   return {
     id: profile.id,
     display_name: typeof profile.display_name === 'string' && profile.display_name ? profile.display_name : 'Spotify account',
-    avatar_url: isSpotifyImageUrl(profile.avatar_url) ? profile.avatar_url : null,
+    avatar_url: isProfileImageUrl(profile.avatar_url) ? profile.avatar_url : null,
     user_id: profile.user_id || null
   };
 }
@@ -215,7 +218,7 @@ function spotifyUserProfile(accessToken, callback) {
     function findAvatar(profile) {
       if (!profile || !Array.isArray(profile.images)) return null;
       for (var i = 0; i < profile.images.length; i++) {
-        if (profile.images[i] && isSpotifyImageUrl(profile.images[i].url)) return profile.images[i].url;
+        if (profile.images[i] && isProfileImageUrl(profile.images[i].url)) return profile.images[i].url;
       }
       return null;
     }
@@ -296,4 +299,4 @@ function requestBuffer(url, options, callback) {
   req.setTimeout(120000, function () { req.destroy(new Error('Upstream request timed out.')); });
   req.end();
 }
-module.exports = { securityHeaders: securityHeaders, json: json, readBody: readBody, cookie: cookie, setCookie: setCookie, clearCookie: clearCookie, clientIp: clientIp, rateLimit: rateLimit, memoryRateLimit: memoryRateLimit, sealSession: sealSession, openSession: openSession, setSession: setSession, getSession: getSession, isLegacySessionId: isLegacySessionId, updateRefreshToken: updateRefreshToken, badgeId: badgeId, spotifyUserId: spotifyUserId, spotifyUserProfile: spotifyUserProfile, profileStoreId: profileStoreId, setProfileStore: setProfileStore, profileKey: profileKey, createProfileId: createProfileId, isSpotifyImageUrl: isSpotifyImageUrl, publicProfile: publicProfile, upsertProfile: upsertProfile, getProfileStore: getProfileStore, saveProfileStore: saveProfileStore, ensureProfileStore: ensureProfileStore, PROFILE_STORE_TTL: PROFILE_STORE_TTL, random: random, pairingCode: pairingCode, redirect: redirect, config: config, origin: origin, isLocalHost: isLocalHost, request: request, requestBuffer: requestBuffer, spotifyToken: spotifyToken, kvSet: kv.kvSet, kvGet: kv.kvGet, kvDel: kv.kvDel };
+module.exports = { securityHeaders: securityHeaders, json: json, readBody: readBody, cookie: cookie, setCookie: setCookie, clearCookie: clearCookie, clientIp: clientIp, rateLimit: rateLimit, memoryRateLimit: memoryRateLimit, sealSession: sealSession, openSession: openSession, setSession: setSession, getSession: getSession, isLegacySessionId: isLegacySessionId, updateRefreshToken: updateRefreshToken, badgeId: badgeId, spotifyUserId: spotifyUserId, spotifyUserProfile: spotifyUserProfile, profileStoreId: profileStoreId, setProfileStore: setProfileStore, profileKey: profileKey, createProfileId: createProfileId, isSpotifyImageUrl: isSpotifyImageUrl, isProfileImageUrl: isProfileImageUrl, publicProfile: publicProfile, upsertProfile: upsertProfile, getProfileStore: getProfileStore, saveProfileStore: saveProfileStore, ensureProfileStore: ensureProfileStore, PROFILE_STORE_TTL: PROFILE_STORE_TTL, random: random, pairingCode: pairingCode, redirect: redirect, config: config, origin: origin, isLocalHost: isLocalHost, request: request, requestBuffer: requestBuffer, spotifyToken: spotifyToken, kvSet: kv.kvSet, kvGet: kv.kvGet, kvDel: kv.kvDel };
