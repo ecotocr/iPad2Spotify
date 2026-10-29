@@ -51,7 +51,7 @@ function request(method,url,body,done){if(url.charAt(0)==='/')url=location.proto
     id('lyrics-status').className='';
     id('lyrics-text').className='hidden';
     var artist=item.artists.map(function(a){return a.name}).join(', ');
-    request('GET','/api/lyrics?artist='+encodeURIComponent(artist)+'&title='+encodeURIComponent(item.name),null,function(status,data){
+    request('GET','/api/spotify/currently-playing?lyrics=1&artist='+encodeURIComponent(artist)+'&title='+encodeURIComponent(item.name),null,function(status,data){
       if(lyricsRequestTrackId!==trackId||!current||!current.item||current.item.id!==trackId)return;
       lyricsRequestTrackId=null;
       if(status!==200){id('lyrics-status').textContent=(data&&data.error)||'Could not load lyrics.';return}

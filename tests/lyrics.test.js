@@ -4,7 +4,7 @@ var path = require('node:path');
 var helpers = require('./helpers');
 
 var lib = require(path.join('..', 'api', '_lib.js'));
-var lyrics = require(path.join('..', 'api', 'lyrics.js'));
+var lyrics = require(path.join('..', 'api', 'spotify', 'currently-playing.js'));
 
 function stubLib(overrides) {
   var originals = {};
@@ -24,18 +24,20 @@ function withSession(extra) {
 
 test('requires GET and a valid artist and title', function () {
   var res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('POST', '/api/lyrics'), res);
+  lyrics(helpers.fakeReq('POST', '/api/spotify/currently-playing?lyrics=1'), res);
   assert.strictEqual(res.statusCode, 405);
 
+  var restore = stubLib(withSession());
   res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('GET', '/api/lyrics?artist=Queen'), res);
+  lyrics(helpers.fakeReq('GET', '/api/spotify/currently-playing?lyrics=1&artist=Queen'), res);
+  restore();
   assert.strictEqual(res.statusCode, 400);
 });
 
 test('requires a paired session', function () {
   var restore = stubLib(withSession({ cookie: function () { return null; } }));
   var res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('GET', '/api/lyrics?artist=Queen&title=Song'), res);
+  lyrics(helpers.fakeReq('GET', '/api/spotify/currently-playing?lyrics=1&artist=Queen&title=Song'), res);
   restore();
   assert.strictEqual(res.statusCode, 401);
 });
@@ -50,7 +52,7 @@ test('looks up lyrics using encoded artist and title and returns uncached text',
     }
   }));
   var res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('GET', '/api/lyrics?artist=AC%2FDC&title=Back%20in%20Black'), res);
+  lyrics(helpers.fakeReq('GET', '/api/spotify/currently-playing?lyrics=1&artist=AC%2FDC&title=Back%20in%20Black'), res);
   restore();
   assert.match(requestedUrl, /AC%2FDC\/Back%20in%20Black$/);
   assert.strictEqual(res.statusCode, 200);
@@ -63,7 +65,7 @@ test('returns not-found for tracks missing from the provider', function () {
     request: function (url, options, callback) { callback(null, 404, { error: 'Not found' }); }
   }));
   var res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('GET', '/api/lyrics?artist=Unknown&title=Song'), res);
+  lyrics(helpers.fakeReq('GET', '/api/spotify/currently-playing?lyrics=1&artist=Unknown&title=Song'), res);
   restore();
   assert.strictEqual(res.statusCode, 404);
   assert.match(helpers.resBody(res).error, /not found/i);
@@ -74,7 +76,7 @@ test('reports upstream failures explicitly', function () {
     request: function (url, options, callback) { callback(new Error('timeout')); }
   }));
   var res = helpers.fakeRes();
-  lyrics(helpers.fakeReq('GET', '/api/lyrics?artist=Queen&title=Song'), res);
+  lyrics(helpers.fakeReq('GET', '/api/spotify/currently-playing?lyrics=1&artist=Queen&title=Song'), res);
   restore();
   assert.strictEqual(res.statusCode, 502);
 });
