@@ -184,6 +184,31 @@ test('sets the selected Spotify device volume', function (t, done) {
   });
 });
 
+test('sets volume on the active device when no device ID was supplied by playback state', function (t, done) {
+  var calls = [];
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) {
+      calls.push(url);
+      if (url === 'https://api.spotify.com/v1/me/player/devices') {
+        return cb(null, 200, { devices: [{ id: 'active-device', is_active: true }] });
+      }
+      cb(null, 204, null);
+    }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'volume', volume_percent: 55 }), res);
+  setImmediate(function () {
+    restore();
+    assert.deepStrictEqual(calls, [
+      'https://api.spotify.com/v1/me/player/devices',
+      'https://api.spotify.com/v1/me/player/volume?volume_percent=55&device_id=active-device'
+    ]);
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
 test('rejects invalid Spotify volume percentages', function () {
   var restore = stubLib({ rateLimit: noKv });
   var res = helpers.fakeRes();

@@ -49,7 +49,8 @@ module.exports = function (req, res) {
                 name: typeof device.name === 'string' ? device.name : 'Unknown device',
                 type: typeof device.type === 'string' ? device.type : 'Device',
                 is_active: !!device.is_active,
-                is_restricted: !!device.is_restricted
+                is_restricted: !!device.is_restricted,
+                volume_percent: typeof device.volume_percent === 'number' ? device.volume_percent : null
               };
             })
           });

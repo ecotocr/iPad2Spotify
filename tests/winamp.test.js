@@ -139,6 +139,9 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.doesNotMatch(html, /No track is currently playing/);
   assert.match(html, /id="volume-down"[^>]*>−<\/button>/);
   assert.match(html, /id="volume-up"[^>]*>\+<\/button>/);
+  assert.doesNotMatch(html, /id="volume-slider"[^>]*disabled/);
+  assert.doesNotMatch(html, /id="volume-down"[^>]*disabled/);
+  assert.doesNotMatch(html, /id="volume-up"[^>]*disabled/);
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(css, /width:56px;height:56px/);
   assert.match(css, /position:absolute;top:0;right:0;bottom:0;left:0;display:block;width:26px;height:26px;margin:auto/);
