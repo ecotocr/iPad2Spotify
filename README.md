@@ -6,7 +6,7 @@ The frontend uses old-browser-compatible ES5 JavaScript and `XMLHttpRequest`. Sp
 
 Since we need to use Vercel anyways, the webapp creates a shortcode for a "badge" you can add to your github profile or anywhere displaying the song played last:
 
-[![Last played on Spotify](https://ipad2spotify.vercel.app/api/badge/1170009226.svg)](https://ipad2spotify.vercel.app/)
+[![Last played on Spotify](https://ipad2spotify-seven.vercel.app/api/badge/1170009226.svg)](https://ipad2spotify-seven.vercel.app/)
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cb0c0bec-ef17-40f6-b6ff-782786272c0a" />
 
@@ -335,7 +335,7 @@ MIT.
 
 ## Important: shared public deployment versus your own fork
 
-The public URL `https://ipad2spotify.vercel.app/` is a shared deployment operated by the repository owner. It is convenient for trying the app, but it means your Spotify authorization request and OAuth callback pass through that owner’s Vercel Functions. Profile refresh tokens are stored in the Redis database connected to that deployment, and playback requests are processed there. The Client Secret is not sent to your browser, but the deployment owner controls the server code, environment configuration, logs, storage account, and future updates.
+The public URL `https://ipad2spotify-seven.vercel.app/` is a shared deployment operated by the repository owner. It is convenient for trying the app, but it means your Spotify authorization request and OAuth callback pass through that owner’s Vercel Functions. Profile refresh tokens are stored in the Redis database connected to that deployment, and playback requests are processed there. The Client Secret is not sent to your browser, but the deployment owner controls the server code, environment configuration, logs, storage account, and future updates.
 
 **No guarantee is made about the safety or availability of Spotify accounts authorized through the shared deployment.** Do not use the shared URL if you are not comfortable trusting its operator with the server-side handling of your Spotify authorization session. This project is an independent hobby project, not operated by Spotify, and the public deployment may change, be disabled, or be abused by third parties.
 
