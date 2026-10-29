@@ -237,6 +237,7 @@ Sessions created by older versions (a random ID stored in Redis as `session:<id>
 The dashboard provides:
 
 - current album artwork,
+- lyrics for the current track from lyrics.ovh (tap the album artwork to toggle),
 - track title,
 - artist and album,
 - current playback state,
@@ -252,6 +253,8 @@ The dashboard provides:
 - Winamp Mode, a Winamp 2.x-style remote control with a playback-driven visualizer.
 
 The regular player also has a **Minimalist View** button. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. Tap the album cover to open the **Exit minimalist view?** confirmation. Select **yes** to return to the regular player or **no** to continue viewing the minimalist display.
+
+In the regular player, tap the album artwork to switch between the cover and lyrics; tap again to return to the artwork. Lyrics are looked up on demand from the lyrics.ovh API using the current artist and track title. Availability depends on the upstream catalog. The API returns plain lyrics, not timestamped lines, so lyrics do not scroll in sync with playback. In Minimalist View, tapping the cover keeps its existing exit-confirmation behavior.
 
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
 
