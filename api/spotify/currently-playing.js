@@ -38,27 +38,20 @@ module.exports = function (req, res) {
       lib.updateRefreshToken(res, session, token);
       if (devicesRequested) {
         var headers = { Authorization: 'Bearer ' + token.access_token };
-        lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: headers }, function (playbackErr, playbackStatus, playback) {
-          if (playbackErr) return lib.json(res, 502, { error: 'Could not check the current playback device.' });
-          if (playbackStatus !== 200 && playbackStatus !== 204) return lib.json(res, playbackStatus, playback || { error: 'Could not check the current playback device.' });
-          lib.request('https://api.spotify.com/v1/me/player/devices', { headers: headers }, function (devicesErr, devicesStatus, data) {
-            if (devicesErr) return lib.json(res, 502, { error: 'Could not load Spotify playback devices.' });
-            if (devicesStatus !== 200) return lib.json(res, devicesStatus, data || { error: 'Could not load Spotify playback devices.' });
-            var devices = data && Array.isArray(data.devices) ? data.devices : [];
-            var activePlayback = playbackStatus === 200 && playback && playback.is_playing && playback.device ? playback.device : null;
-            lib.json(res, 200, {
-              playing_device_id: activePlayback && activePlayback.id || null,
-              playing_device_name: activePlayback && activePlayback.name || null,
-              devices: devices.map(function (device) {
-                return {
-                  id: device.id || null,
-                  name: typeof device.name === 'string' ? device.name : 'Unknown device',
-                  type: typeof device.type === 'string' ? device.type : 'Device',
-                  is_active: !!device.is_active,
-                  is_restricted: !!device.is_restricted
-                };
-              })
-            });
+        lib.request('https://api.spotify.com/v1/me/player/devices', { headers: headers }, function (devicesErr, devicesStatus, data) {
+          if (devicesErr) return lib.json(res, 502, { error: 'Could not load Spotify playback devices.' });
+          if (devicesStatus !== 200) return lib.json(res, devicesStatus, data || { error: 'Could not load Spotify playback devices.' });
+          var devices = data && Array.isArray(data.devices) ? data.devices : [];
+          lib.json(res, 200, {
+            devices: devices.map(function (device) {
+              return {
+                id: device.id || null,
+                name: typeof device.name === 'string' ? device.name : 'Unknown device',
+                type: typeof device.type === 'string' ? device.type : 'Device',
+                is_active: !!device.is_active,
+                is_restricted: !!device.is_restricted
+              };
+            })
           });
         });
         return;

@@ -28,18 +28,21 @@ module.exports = function (req, res) {
     var isArtist = body && body.action === 'play_artist';
     var isPlaylist = body && body.action === 'play_playlist';
     var isSeek = body && body.action === 'seek';
+    var isDeviceTransfer = body && body.action === 'transfer_device';
+    var transferDeviceId = isDeviceTransfer && typeof body.device_id === 'string' && /^[^\u0000-\u001f\u007f]{1,256}$/.test(body.device_id) ? body.device_id : null;
     if (isSeek && (!Number.isInteger(body.position_ms) || body.position_ms < 0 || body.position_ms > 86400000)) return lib.json(res, 400, { error: 'Seek position must be a whole number between 0 and 86400000 milliseconds.' });
-    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : (!isArtist && !isPlaylist && paths[body && body.action]);
+    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : isDeviceTransfer ? ['PUT', '/me/player'] : (!isArtist && !isPlaylist && paths[body && body.action]);
     var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylist ? idFrom(body, 'playlist_id') : null);
     if ((isArtist || isPlaylist) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
+    if (isDeviceTransfer && !transferDeviceId) return lib.json(res, 400, { error: 'A valid Spotify device ID is required.' });
     if (!isArtist && !isPlaylist && !target) return lib.json(res, 400, { error: 'Unknown playback command.' });
     lib.getSession(req, res, function (err, session) { if (err || !session) return lib.json(res, 401, { error: 'Session expired. Pair again.' }); var cfg = lib.config(req); lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) { if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired.' });
       lib.updateRefreshToken(res, session, token);
-      findDeviceId(token.access_token, function (deviceId) {
+      function sendCommand(deviceId) {
         var method = (isArtist || isPlaylist) ? 'PUT' : target[0];
         var path = (isArtist || isPlaylist) ? '/me/player/play' : target[1];
         if (deviceId) path += (path.indexOf('?') === -1 ? '?' : '&') + 'device_id=' + encodeURIComponent(deviceId);
-        var payload = isArtist ? JSON.stringify({ context_uri: 'spotify:artist:' + actionId }) : isPlaylist ? JSON.stringify({ context_uri: 'spotify:playlist:' + actionId }) : null;
+        var payload = isArtist ? JSON.stringify({ context_uri: 'spotify:artist:' + actionId }) : isPlaylist ? JSON.stringify({ context_uri: 'spotify:playlist:' + actionId }) : isDeviceTransfer ? JSON.stringify({ device_ids: [transferDeviceId], play: true }) : null;
         var headers = { Authorization: 'Bearer ' + token.access_token };
         if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); } else { headers['Content-Length'] = 0; }
         lib.request('https://api.spotify.com/v1' + path, { method: method, headers: headers, body: payload }, function (apiErr, status, data) {
@@ -47,7 +50,9 @@ module.exports = function (req, res) {
           if (status === 200 || status === 204) return lib.json(res, 200, {});
           lib.json(res, status, { error: spotifyErrorMessage(data) });
         });
-      });
+      }
+      if (isDeviceTransfer) sendCommand(null);
+      else findDeviceId(token.access_token, sendCommand);
     }); });
   });
 };

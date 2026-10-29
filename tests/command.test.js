@@ -139,6 +139,34 @@ test('rejects invalid seek positions', function () {
   assert.match(helpers.resBody(res).error, /seek position/i);
 });
 
+test('transfers playback to a selected Spotify device', function (t, done) {
+  var calls = [];
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) { calls.push({ url: url, options: options }); cb(null, 204, null); }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'transfer_device', device_id: 'speaker-device-123' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].url, 'https://api.spotify.com/v1/me/player');
+    assert.strictEqual(calls[0].options.method, 'PUT');
+    assert.deepStrictEqual(JSON.parse(calls[0].options.body), { device_ids: ['speaker-device-123'], play: true });
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
+test('rejects an invalid Spotify device ID', function () {
+  var restore = stubLib({ rateLimit: noKv });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'transfer_device', device_id: 'bad\u0000device' }), res);
+  restore();
+  assert.strictEqual(res.statusCode, 400);
+  assert.match(helpers.resBody(res).error, /device id/i);
+});
+
 test('starts artist radio with a valid artist id via context_uri', function (t, done) {
   var calledWith = null;
   var restore = stubLib({

@@ -41,14 +41,13 @@ test('a paired poll returns Spotify data without any Redis commands', function (
   });
 });
 
-test('device lookup identifies the device currently playing and lists available devices', function (t, done) {
+test('device lookup lists available devices without requiring a current playback response', function (t, done) {
   var urls = [];
   var restore = stubLib(withRedisFree({
     config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
     spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
     request: function (url, options, cb) {
       urls.push(url);
-      if (/currently-playing/.test(url)) return cb(null, 200, { is_playing: true, device: { id: 'device-1', name: 'Living Room' } });
       cb(null, 200, { devices: [
         { id: 'device-1', name: 'Living Room', type: 'Speaker', is_active: true },
         { id: 'device-2', name: 'Phone', type: 'Smartphone', is_active: false }
@@ -62,11 +61,8 @@ test('device lookup identifies the device currently playing and lists available 
     var body = helpers.resBody(res);
     assert.strictEqual(res.statusCode, 200);
     assert.deepStrictEqual(urls, [
-      'https://api.spotify.com/v1/me/player/currently-playing',
       'https://api.spotify.com/v1/me/player/devices'
     ]);
-    assert.strictEqual(body.playing_device_id, 'device-1');
-    assert.strictEqual(body.playing_device_name, 'Living Room');
     assert.strictEqual(body.devices.length, 2);
     assert.strictEqual(body.devices[0].name, 'Living Room');
     assert.strictEqual(body.devices[1].is_active, false);

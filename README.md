@@ -259,7 +259,7 @@ The Previous control follows Spotify's usual timing behavior: at 3 seconds or ea
 
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
 
-The playback-devices icon lists devices Spotify currently reports as available. It marks the device reported by Spotify's current-playback endpoint as **Playing now** when a track is actively playing; Spotify's separate active-device flag is shown as **Active** and does not by itself mean audio is playing there.
+The playback-devices icon lists devices Spotify currently reports as available. It marks the device from the current playback poll as **Playing now** and Spotify's separate active-device flag as **Active**. Select an available device to transfer playback there; restricted devices cannot be selected. Transferring starts playback on the selected device.
 
 Winamp Mode is not currently exposed in the player controls. Its renderer and implementation notes below are retained for maintainers.
 
