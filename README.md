@@ -248,7 +248,8 @@ The dashboard provides:
 - adaptive currently-playing checks, normally every 15–30 seconds,
 - Minimalist View with centered album artwork and track text,
 - Search Artist to start artist radio playback for any artist,
-- Search Playlist to find Spotify playlists and start a selected playlist.
+- Search Playlist to find Spotify playlists and start a selected playlist,
+- available Spotify playback devices, with the current audio-output device identified.
 
 The regular player has search and Minimalist View icon controls. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. A single tap toggles between artwork and lyrics; use the **X** in the top-right corner to return to the regular player.
 
@@ -257,6 +258,8 @@ In the regular player, tap the album artwork to switch to lyrics and use the **A
 The Previous control follows Spotify's usual timing behavior: at 3 seconds or earlier it skips to the previous track; after 3 seconds it restarts the current track.
 
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
+
+The playback-devices icon lists devices Spotify currently reports as available. It marks the device reported by Spotify's current-playback endpoint as **Playing now** when a track is actively playing; Spotify's separate active-device flag is shown as **Active** and does not by itself mean audio is playing there.
 
 Winamp Mode is not currently exposed in the player controls. Its renderer and implementation notes below are retained for maintainers.
 

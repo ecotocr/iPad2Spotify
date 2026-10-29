@@ -27,13 +27,42 @@ module.exports = function (req, res) {
       });
     });
   }
-  if (lib.memoryRateLimit(req, 'poll', 40, 60)) return lib.json(res, 429, { error: 'Polling too frequently. Try again shortly.' });
+  var devicesRequested = query.get('devices') === '1';
+  if (devicesRequested && lib.memoryRateLimit(req, 'devices', 10, 60)) return lib.json(res, 429, { error: 'Too many device-list requests. Try again shortly.' });
+  if (!devicesRequested && lib.memoryRateLimit(req, 'poll', 40, 60)) return lib.json(res, 429, { error: 'Polling too frequently. Try again shortly.' });
   lib.getSession(req, res, function (err, session) {
     if (err || !session) return lib.json(res, 401, { error: 'Session expired. Pair again.' });
     var cfg = lib.config(req);
     lib.spotifyToken(cfg, 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(session.refresh_token), function (tokenErr, tokenStatus, token) {
       if (tokenErr || tokenStatus !== 200 || !token || !token.access_token) return lib.json(res, 401, { error: 'Spotify authorization expired. Pair again.' });
       lib.updateRefreshToken(res, session, token);
+      if (devicesRequested) {
+        var headers = { Authorization: 'Bearer ' + token.access_token };
+        lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: headers }, function (playbackErr, playbackStatus, playback) {
+          if (playbackErr) return lib.json(res, 502, { error: 'Could not check the current playback device.' });
+          if (playbackStatus !== 200 && playbackStatus !== 204) return lib.json(res, playbackStatus, playback || { error: 'Could not check the current playback device.' });
+          lib.request('https://api.spotify.com/v1/me/player/devices', { headers: headers }, function (devicesErr, devicesStatus, data) {
+            if (devicesErr) return lib.json(res, 502, { error: 'Could not load Spotify playback devices.' });
+            if (devicesStatus !== 200) return lib.json(res, devicesStatus, data || { error: 'Could not load Spotify playback devices.' });
+            var devices = data && Array.isArray(data.devices) ? data.devices : [];
+            var activePlayback = playbackStatus === 200 && playback && playback.is_playing && playback.device ? playback.device : null;
+            lib.json(res, 200, {
+              playing_device_id: activePlayback && activePlayback.id || null,
+              playing_device_name: activePlayback && activePlayback.name || null,
+              devices: devices.map(function (device) {
+                return {
+                  id: device.id || null,
+                  name: typeof device.name === 'string' ? device.name : 'Unknown device',
+                  type: typeof device.type === 'string' ? device.type : 'Device',
+                  is_active: !!device.is_active,
+                  is_restricted: !!device.is_restricted
+                };
+              })
+            });
+          });
+        });
+        return;
+      }
       lib.request('https://api.spotify.com/v1/me/player/currently-playing', { headers: { Authorization: 'Bearer ' + token.access_token } }, function (apiErr, status, data) {
         if (apiErr) return lib.json(res, 502, { error: 'Spotify request failed.' });
         if (status === 204) return lib.json(res, 200, { item: null, is_playing: false });
