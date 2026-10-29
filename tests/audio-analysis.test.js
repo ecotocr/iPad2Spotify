@@ -97,7 +97,7 @@ test('analysis requests are rate limited before session, cache, and Spotify work
   assert.strictEqual(counters.upstream || 0, 0);
 });
 
-test('analysis 403 displays the provider reason and keeps the visual fallback available', function () {
+test('analysis 403 stays silent and keeps the visual fallback available', function () {
   var statusElement = { textContent: '', className: 'message hidden' };
   var xhr;
   function FakeXHR() { xhr = this; }
@@ -121,7 +121,7 @@ test('analysis 403 displays the provider reason and keeps the visual fallback av
   xhr.responseText = JSON.stringify({ error: { message: 'Audio Analysis access is disabled for this app.' } });
   xhr.onreadystatechange();
 
-  assert.strictEqual(statusElement.textContent, 'Audio analysis unavailable (Audio Analysis access is disabled for this app.). Winamp is using its built-in visual fallback.');
-  assert.strictEqual(statusElement.className, 'message');
+  assert.strictEqual(statusElement.textContent, '');
+  assert.strictEqual(statusElement.className, 'message hidden');
   assert.strictEqual(appWindow.getAudioAnalysisBands(), null);
 });

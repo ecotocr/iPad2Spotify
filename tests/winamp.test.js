@@ -123,12 +123,16 @@ test('settings fall back to defaults on corrupt storage', () => {
   assert.strictEqual(W.loadSettings(null).open.md, true);
 });
 
-test('index.html wires Winamp mode without the removed winamp2-js port', () => {
+test('index.html hides visualizer controls and analysis status while keeping scripts compatible', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.match(html, /id="winamp-toggle"/);
+  assert.doesNotMatch(html, /id="winamp-toggle"/);
+  assert.doesNotMatch(html, /id="badge"[^>]*>Create GitHub README Badge/);
   assert.match(html, /id="winamp"/);
   assert.match(html, /name="mobile-web-app-capable" content="yes"/);
-  assert.match(html, /id="audio-analysis-status" class="message hidden" aria-live="polite"/);
+  assert.doesNotMatch(html, /id="audio-analysis-status"/);
+  assert.match(html, /id="timeline-slider"[^>]*type="range"/);
+  assert.match(html, /id="disconnect-modal"/);
+  assert.match(html, /id="minimalist-exit"/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
   assert.doesNotMatch(html, /winamp2-js/);

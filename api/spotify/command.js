@@ -27,7 +27,9 @@ module.exports = function (req, res) {
   lib.readBody(req, function (raw) { var body; try { body = JSON.parse(raw); } catch (e) {}
     var isArtist = body && body.action === 'play_artist';
     var isPlaylist = body && body.action === 'play_playlist';
-    var target = !isArtist && !isPlaylist && paths[body && body.action];
+    var isSeek = body && body.action === 'seek';
+    if (isSeek && (!Number.isInteger(body.position_ms) || body.position_ms < 0 || body.position_ms > 86400000)) return lib.json(res, 400, { error: 'Seek position must be a whole number between 0 and 86400000 milliseconds.' });
+    var target = isSeek ? ['PUT', '/me/player/seek?position_ms=' + body.position_ms] : (!isArtist && !isPlaylist && paths[body && body.action]);
     var actionId = (isArtist ? idFrom(body, 'artist_id') : isPlaylist ? idFrom(body, 'playlist_id') : null);
     if ((isArtist || isPlaylist) && !actionId) return lib.json(res, 400, { error: 'Unknown ' + (isArtist ? 'artist' : 'playlist') + '.' });
     if (!isArtist && !isPlaylist && !target) return lib.json(res, 400, { error: 'Unknown playback command.' });

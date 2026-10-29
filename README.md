@@ -42,7 +42,7 @@ Playback polling does not use Redis at all. The paired session (the Spotify refr
 
 To reduce Vercel Function invocations, the Home Screen app uses adaptive polling. When nothing is playing or playback is paused, it checks approximately every 60 seconds. During playback it checks approximately every 30 seconds, with a shorter check near the end of a track so the next song can be detected. When the Home Screen app is hidden or backgrounded, polling stops completely and resumes immediately when the page becomes visible again.
 
-The player includes a **Refresh now** button for an immediate check. When the player says **Nothing playing**, this may mean that Spotify has no active controllable playback, or simply that the first optimized background check has not occurred yet. Automatic checks can take up to 60 seconds; select **Refresh now** after starting Spotify on another device rather than waiting.
+The player includes a refresh icon for an immediate check. When the player says **Nothing playing**, this may mean that Spotify has no active controllable playback, or simply that the first optimized background check has not occurred yet. Automatic checks can take up to 60 seconds; select the refresh icon after starting Spotify on another device rather than waiting.
 
 During a request, the button changes to **Checking…** and displays a small loading animation. The animation uses ordinary CSS and remains compatible with Safari on iOS 9.3.6.
 
@@ -202,17 +202,17 @@ You can complete the login on a phone or computer, then enter the resulting code
 
 ## GitHub README last-played badge
 
-After pairing the app, select **Create GitHub README Badge** in the regular player. The badge URL is based on your Spotify account ID, so it is the same every time. The app displays Markdown similar to:
+The player badge-creation button is currently hidden. Existing badge URLs continue to work. A badge URL is based on your Spotify account ID, so it is the same every time. The API displays Markdown similar to:
 
 ```markdown
 [![Last played on Spotify](https://your-project.vercel.app/api/badge/<your-spotify-user-id>.svg)](https://your-project.vercel.app/)
 ```
 
-You only need to add this to your GitHub profile once. When you log in to Spotify and pair again later, the existing badge is automatically updated with the new authorization, so the URL keeps working. Selecting the button again simply shows the same URL. A badge only exists for accounts that have logged in and selected **Create GitHub README Badge**; any other account ID returns 404. The Spotify account ID (shown in your Spotify profile link, `open.spotify.com/user/<id>`) is used rather than your email address, which is never requested or exposed.
+You only need to add this to your GitHub profile once. When you log in to Spotify and pair again later, an existing badge is automatically updated with the new authorization, so the URL keeps working. A badge only exists for accounts that have created one; any other account ID returns 404. The Spotify account ID (shown in your Spotify profile link, `open.spotify.com/user/<id>`) is used rather than your email address, which is never requested or exposed.
 
 Copy that Markdown into a GitHub profile `README.md`. The SVG displays the track currently playing on the account, or the most recently played track when nothing is playing, including album artwork, song title, and artist. For each badge request, the server asks Spotify directly (`GET /v1/me/player/currently-playing`, falling back to `GET /v1/me/player/recently-played?limit=1`) and selects `album.images[0].url`, the highest-resolution artwork returned by Spotify. It then downloads and embeds the artwork inside the SVG so GitHub does not need to load a remote image nested inside the badge. The badge is a public image URL: anyone who can see the README source can request it.
 
-The badge lifecycle is: **Create GitHub README Badge** stores a `badge:<spotify-user-id>` record in Redis together with the Spotify refresh token from the paired session (pairing again updates that record); GitHub requests `/api/badge/<key>.svg` when rendering the profile README; the badge endpoint reads that one Redis record, refreshes a Spotify access token, looks up the current or most recent track, embeds the album image, and returns an SVG. The response is cached by Vercel's CDN for five minutes, so each badge costs at most one Redis read per five minutes regardless of how often it is viewed.
+The badge lifecycle is: the badge creation endpoint stores a `badge:<spotify-user-id>` record in Redis together with the Spotify refresh token from the paired session (pairing again updates that record); GitHub requests `/api/badge/<key>.svg` when rendering the profile README; the badge endpoint reads that one Redis record, refreshes a Spotify access token, looks up the current or most recent track, embeds the album image, and returns an SVG. The response is cached by Vercel's CDN for five minutes, so each badge costs at most one Redis read per five minutes regardless of how often it is viewed.
 
 The badge works independently of the iPad app: it reflects Spotify directly, even while the app is closed. GitHub and image proxies may cache the image, so changes can appear with a delay of several minutes. Badges created before the recently-played scope was added fall back to showing only the currently playing track until you log in to Spotify again and create a new badge.
 
@@ -244,15 +244,13 @@ The dashboard provides:
 - play/pause,
 - previous track,
 - next track,
-- a playback timeline showing elapsed and total track time,
+- a playback timeline slider for seeking to a position in the current track,
 - adaptive currently-playing checks, normally every 15–30 seconds,
-- a custom SVG last-played card for GitHub profile READMEs,
 - Minimalist View with centered album artwork and track text,
 - Search Artist to start artist radio playback for any artist,
-- Search Playlist to find Spotify playlists and start a selected playlist,
-- Winamp Mode, a Winamp 2.x-style remote control with a playback-driven visualizer.
+- Search Playlist to find Spotify playlists and start a selected playlist.
 
-The regular player also has a **Minimalist View** button. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. A single tap toggles between artwork and lyrics; double-tap the artwork or lyrics to return to the regular player.
+The regular player has search and Minimalist View icon controls. Minimalist View centers the album cover on the screen and places the artist and song name directly below it, hiding the other controls and interface elements. A single tap toggles between artwork and lyrics; use the **X** in the top-right corner to return to the regular player.
 
 In the regular player, tap the album artwork to switch to lyrics and use the **Album artwork** button to return. The lyrics panel expands alongside the player details, and its text can be scrolled when needed. If the track changes while lyrics are displayed, the lyrics remain open and update for the new track. Lyrics are looked up on demand from the lyrics.ovh API using the current artist and track title. Availability depends on the upstream catalog. The API returns plain lyrics, not timestamped lines, so lyrics do not scroll in sync with playback.
 
@@ -260,7 +258,7 @@ The Previous control follows Spotify's usual timing behavior: at 3 seconds or ea
 
 The **Search Artist** button opens a search dialog. Enter an artist name and select **Search** to see matching Spotify artists, then select an artist to start playback of that artist's catalog (Spotify's equivalent of "artist radio") on the currently active device.
 
-The **Winamp Mode** button opens a Winamp 2.x-style remote control for the same Spotify session. It is plain ES5 and bitmap sprites (no Webamp bundle, no build step), so it runs on the iPad 2 with Safari on iOS 9.3.6. The mode is remembered on the device until you exit it with **Exit** in the main menu or the main window's close/minimize buttons.
+Winamp Mode is not currently exposed in the player controls. Its renderer and implementation notes below are retained for maintainers.
 
 iPad2Spotify is a remote: Spotify plays the audio on another device, and the Spotify Web API only provides playback state and commands, not the audio stream. Winamp Mode is designed around that rather than imitating a local player:
 
@@ -300,7 +298,7 @@ This is an independent hobby project and is **not operated, sponsored, endorsed,
 
 If you deploy this repository publicly, visitors can use your Vercel deployment and shared Spotify Developer application. They may consume Vercel Function invocations, Redis operations, and Spotify API quota. The included API applies lightweight Redis-backed per-IP limits to login starts, OAuth callbacks, pairing attempts, and badge creation, plus best-effort in-memory per-instance limits to playback polling and playback commands (so that polling never costs Redis commands). Badge requests are protected by CDN caching. These limits reduce casual abuse but are not a complete DDoS or identity system; monitor your Vercel and Redis usage and disable or protect the deployment if it is abused.
 
-The **Disconnect** button calls `/api/auth/logout` and clears the encrypted session cookie. Users should also revoke this app from their Spotify account settings if they want to remove its authorization completely.
+The **Disconnect** button asks for confirmation, then calls `/api/auth/logout` and clears the encrypted session cookie. Users should also revoke this app from their Spotify account settings if they want to remove its authorization completely.
 
 A public badge reveals the selected account’s current or most recently played track metadata and album artwork. Do not create a public badge if that listening information should remain private.
 
@@ -320,7 +318,7 @@ The Home Screen icon (`apple-touch-icon`, 76 px for iPad 2 up to 180 px) and fav
 
 Vercel cannot force interactive Spotify login to remain inside an iOS 9 standalone Home Screen window. The pairing flow is intentional: login takes place in normal Safari or another browser, and the authenticated session is then transferred to the fullscreen app using a one-time code.
 
-Adaptive polling and the hidden-page pause can delay visible updates on the iPad; use **Refresh now** when an immediate check is needed. Badge updates can be delayed by up to five minutes of CDN caching plus GitHub image caching.
+Adaptive polling and the hidden-page pause can delay visible updates on the iPad; use the refresh icon when an immediate check is needed. Badge updates can be delayed by up to five minutes of CDN caching plus GitHub image caching.
 
 GitHub Pages alone cannot safely store the Spotify Client Secret or maintain the shared pairing/session state required by this flow.
 

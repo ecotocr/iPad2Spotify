@@ -113,6 +113,32 @@ test('restarts playback by seeking to zero', function (t, done) {
   });
 });
 
+test('seeks to a validated playback position', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) { calledWith = { url: url, options: options }; cb(null, 204, null); }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'seek', position_ms: 73500 }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/seek?position_ms=73500');
+    assert.strictEqual(calledWith.options.method, 'PUT');
+    assert.strictEqual(res.statusCode, 200);
+    done();
+  });
+});
+
+test('rejects invalid seek positions', function () {
+  var restore = stubLib({ rateLimit: noKv });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'seek', position_ms: '1200' }), res);
+  restore();
+  assert.strictEqual(res.statusCode, 400);
+  assert.match(helpers.resBody(res).error, /seek position/i);
+});
+
 test('starts artist radio with a valid artist id via context_uri', function (t, done) {
   var calledWith = null;
   var restore = stubLib({
