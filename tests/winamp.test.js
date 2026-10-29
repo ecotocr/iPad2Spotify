@@ -137,12 +137,15 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(html, /id="volume-slider"[^>]*type="range"/);
   assert.match(html, /id="devices-modal"/);
   assert.doesNotMatch(html, /No track is currently playing/);
+  assert.match(html, /id="volume-down"[^>]*>−<\/button>/);
+  assert.match(html, /id="volume-up"[^>]*>\+<\/button>/);
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(css, /width:56px;height:56px/);
-  assert.match(css, /position:absolute;top:50%;left:50%;display:block;width:26px;height:26px/);
-  assert.match(css, /-webkit-transform:translate\(-50%,-50%\)/);
+  assert.match(css, /position:absolute;top:0;right:0;bottom:0;left:0;display:block;width:26px;height:26px;margin:auto/);
   assert.match(css, /refresh-spin/);
   assert.match(css, /\.connection-tools #status\{display:inline-block/);
+  assert.match(css, /\.details h2\{font-family:Arial,"Helvetica Neue",sans-serif;font-size:39px/);
+  assert.match(css, /\.volume-adjustment\{display:-webkit-box;display:-webkit-flex;display:flex/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
   assert.doesNotMatch(html, /winamp2-js/);
