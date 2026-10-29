@@ -184,6 +184,25 @@ test('sets the selected Spotify device volume', function (t, done) {
   });
 });
 
+test('reports when Spotify cannot control a device volume', function (t, done) {
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) {
+      cb(null, 404, { error: { status: 404, message: 'Player command failed: Cannot control device volume.', reason: 'PLAYER_COMMAND_FAILED' } });
+    }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, { action: 'volume', volume_percent: 50, device_id: 'speaker-device-123' }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 409);
+    assert.strictEqual(helpers.resBody(res).code, 'DEVICE_VOLUME_UNSUPPORTED');
+    assert.strictEqual(helpers.resBody(res).device_id, 'speaker-device-123');
+    assert.match(helpers.resBody(res).error, /device’s own volume controls/);
+    done();
+  });
+});
+
 test('sets volume on the active device when no device ID was supplied by playback state', function (t, done) {
   var calls = [];
   var restore = stubLib({

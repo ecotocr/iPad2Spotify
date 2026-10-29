@@ -59,6 +59,7 @@ body:not(.minimalist) #player.lyrics-visible #art-frame{width:46vw;max-width:500
 .volume-adjustment input::-webkit-slider-thumb{width:16px;height:16px;margin-top:-6px;border:0;border-radius:50%;background:#b6d64b;-webkit-appearance:none}
 .volume-adjustment input::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:#b6d64b}
 .volume-adjustment span{width:38px;margin-left:10px;color:#a7b0a5;font-size:12px;text-align:right}
+.volume-message{margin:6px 0 0;color:#a7b0a5;font-size:11px;line-height:1.35}
 .volume-control+ .timeline{margin-top:12px}
 @-webkit-keyframes refresh-spin{from{-webkit-transform:rotate(0deg)}to{-webkit-transform:rotate(360deg)}}
 @keyframes refresh-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}

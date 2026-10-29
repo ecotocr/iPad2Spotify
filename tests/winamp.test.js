@@ -135,6 +135,7 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(html, /id="minimalist-exit"/);
   assert.match(html, /id="devices"[^>]*aria-label="Spotify playback devices"/);
   assert.match(html, /id="volume-slider"[^>]*type="range"/);
+  assert.match(html, /id="volume-message"/);
   assert.match(html, /id="devices-modal"/);
   assert.doesNotMatch(html, /No track is currently playing/);
   assert.match(html, /id="volume-down"[^>]*>−<\/button>/);

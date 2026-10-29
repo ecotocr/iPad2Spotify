@@ -49,8 +49,8 @@ test('device lookup lists available devices without requiring a current playback
     request: function (url, options, cb) {
       urls.push(url);
       cb(null, 200, { devices: [
-        { id: 'device-1', name: 'Living Room', type: 'Speaker', is_active: true },
-        { id: 'device-2', name: 'Phone', type: 'Smartphone', is_active: false }
+        { id: 'device-1', name: 'Living Room', type: 'Speaker', is_active: true, supports_volume: false },
+        { id: 'device-2', name: 'Phone', type: 'Smartphone', is_active: false, supports_volume: true }
       ] });
     }
   }));
@@ -65,7 +65,9 @@ test('device lookup lists available devices without requiring a current playback
     ]);
     assert.strictEqual(body.devices.length, 2);
     assert.strictEqual(body.devices[0].name, 'Living Room');
+    assert.strictEqual(body.devices[0].supports_volume, false);
     assert.strictEqual(body.devices[1].is_active, false);
+    assert.strictEqual(body.devices[1].supports_volume, true);
     done();
   });
 });

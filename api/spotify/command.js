@@ -52,6 +52,11 @@ module.exports = function (req, res) {
         lib.request('https://api.spotify.com/v1' + path, { method: method, headers: headers, body: payload }, function (apiErr, status, data) {
           if (apiErr) return lib.json(res, 502, { error: 'Spotify request failed.' });
           if (status === 200 || status === 204) return lib.json(res, 200, {});
+          var spotifyError = data && data.error;
+          var errorText = typeof spotifyError === 'string' ? spotifyError : spotifyError && (spotifyError.message || spotifyError.reason);
+          if (isVolume && typeof errorText === 'string' && /cannot control device volume/i.test(errorText)) {
+            return lib.json(res, 409, { error: 'Spotify does not allow this device’s volume to be changed from the app. Use the device’s own volume controls.', code: 'DEVICE_VOLUME_UNSUPPORTED', device_id: deviceId || null });
+          }
           lib.json(res, status, { error: spotifyErrorMessage(data) });
         });
       }

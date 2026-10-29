@@ -50,6 +50,7 @@ module.exports = function (req, res) {
                 type: typeof device.type === 'string' ? device.type : 'Device',
                 is_active: !!device.is_active,
                 is_restricted: !!device.is_restricted,
+                supports_volume: typeof device.supports_volume === 'boolean' ? device.supports_volume : null,
                 volume_percent: typeof device.volume_percent === 'number' ? device.volume_percent : null
               };
             })
