@@ -38,6 +38,7 @@ function loadPlaylist(accessToken, playback, playlistId, requestedPlaylistId, pl
     var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/' + endpoint + '?limit=50&offset=' + playlistOffset;
     lib.request(playlistUrl, { headers: headers }, function (playlistErr, playlistStatus, playlistData) {
       if (playlistStatus === 404 && endpoint === 'items') return requestPlaylistItems('tracks');
+      if (playlistStatus === 404 && endpoint === 'tracks') return loadCurrentQueue(accessToken, playback, res);
       if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
       if (playlistStatus === 403) {
         return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
