@@ -33,31 +33,36 @@ function loadPlaylist(accessToken, playback, playlistId, requestedPlaylistId, pl
   if (requestedPlaylistId && requestedPlaylistId !== playlistId) {
     return lib.json(res, 409, { error: 'Playback has moved to a different playlist. Refresh the track list.' });
   }
-  var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/items?limit=50&offset=' + playlistOffset;
-  lib.request(playlistUrl, { headers: { Authorization: 'Bearer ' + accessToken } }, function (playlistErr, playlistStatus, playlistData) {
-    if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
-    if (playlistStatus === 403) {
-      return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
-    }
-    if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
-      return lib.json(res, playlistStatus || 502, playlistData || { error: 'Spotify could not load the current playlist tracks.' });
-    }
-    var items = playlistData.items.map(function (entry, index) {
-      var track = entry && (entry.item || entry.track);
-      return trackDetails(track, playlistOffset + index, !!entry && !entry.is_local);
-    }).filter(Boolean);
-    var total = Number.isInteger(playlistData.total) ? playlistData.total : playlistOffset + items.length;
-    var nextOffset = playlistOffset + playlistData.items.length;
-    lib.json(res, 200, {
-      source: 'playlist',
-      playlist_id: playlistId,
-      items: items,
-      total: total,
-      current_track_uri: playback.item && playback.item.uri || null,
-      device_id: playback.device && playback.device.id || null,
-      next_offset: nextOffset < total ? nextOffset : null
+  var headers = { Authorization: 'Bearer ' + accessToken };
+  function requestPlaylistItems(endpoint) {
+    var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/' + endpoint + '?limit=50&offset=' + playlistOffset;
+    lib.request(playlistUrl, { headers: headers }, function (playlistErr, playlistStatus, playlistData) {
+      if (playlistStatus === 404 && endpoint === 'items') return requestPlaylistItems('tracks');
+      if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
+      if (playlistStatus === 403) {
+        return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
+      }
+      if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
+        return lib.json(res, playlistStatus || 502, playlistData || { error: 'Spotify could not load the current playlist tracks.' });
+      }
+      var items = playlistData.items.map(function (entry, index) {
+        var track = entry && (entry.item || entry.track);
+        return trackDetails(track, playlistOffset + index, !!entry && !entry.is_local);
+      }).filter(Boolean);
+      var total = Number.isInteger(playlistData.total) ? playlistData.total : playlistOffset + items.length;
+      var nextOffset = playlistOffset + playlistData.items.length;
+      lib.json(res, 200, {
+        source: 'playlist',
+        playlist_id: playlistId,
+        items: items,
+        total: total,
+        current_track_uri: playback.item && playback.item.uri || null,
+        device_id: playback.device && playback.device.id || null,
+        next_offset: nextOffset < total ? nextOffset : null
+      });
     });
-  });
+  }
+  requestPlaylistItems('items');
 }
 function loadCurrentQueue(accessToken, playback, res) {
   lib.request('https://api.spotify.com/v1/me/player/queue', { headers: { Authorization: 'Bearer ' + accessToken } }, function (queueErr, queueStatus, queueData) {

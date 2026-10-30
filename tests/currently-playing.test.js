@@ -126,6 +126,40 @@ test('current playlist request lists sanitized tracks with stable playlist offse
   });
 });
 
+test('current playlist retries the legacy tracks endpoint when Spotify returns 404 for items', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) {
+        return cb(null, 200, {
+          context: { uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk' },
+          item: { uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK' }
+        });
+      }
+      if (url.indexOf('/items?') !== -1) return cb(null, 404, { error: { status: 404, message: 'Resource not found' } });
+      cb(null, 200, { total: 1, items: [
+        { track: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] } }
+      ] });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    var body = helpers.resBody(res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.items[0].name, 'Current Song');
+    assert.deepStrictEqual(urls.slice(1), [
+      'https://api.spotify.com/v1/playlists/37i9dQZF1DX4JAvHpjipBk/items?limit=50&offset=0',
+      'https://api.spotify.com/v1/playlists/37i9dQZF1DX4JAvHpjipBk/tracks?limit=50&offset=0'
+    ]);
+    done();
+  });
+});
+
 test('current playlist lookup accepts Spotify legacy user playlist URIs', function (t, done) {
   var urls = [];
   var restore = stubLib(withRedisFree({
