@@ -127,7 +127,7 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .playlist-track-title{font-weight:bold}
 .playlist-track-artist{margin-top:4px;color:#aab3aa;font-size:12px}
 .playlist-track-marker{position:absolute;top:50%;right:10px;color:#b6d64b;font-size:9px;font-weight:bold;-webkit-transform:translateY(-50%);transform:translateY(-50%)}
-.controls .round svg{display:block;width:24px;height:24px;margin:auto;fill:currentColor}
+.controls .round svg{display:block;width:24px;height:24px;margin:auto;fill:#f5f1e8}
 .icon-prev:before,.icon-prev:after,.icon-next:before,.icon-next:after{display:none;content:none}
 #artist-question,#devices-question,#playlist-question{font-family:Arial,"Helvetica Neue",sans-serif}
 .minimalist-exit{top:calc(15vh + 12px);right:calc(50vw - 35vh + 12px);font-size:0;line-height:0}
@@ -135,5 +135,6 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .minimalist-exit:before{-webkit-transform:rotate(45deg);transform:rotate(45deg)}
 .minimalist-exit:after{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}
 @media(max-width:600px){.minimalist-exit{top:calc(15vh + 12px);right:calc(10vw + 12px)}}
+body.minimalist .player.lyrics-visible~.minimalist-exit{top:calc(12vh + 12px);right:calc(3vw + 12px)}
 .playlist-box #playlist-more{margin-top:10px}
 @media(max-width:600px){.playlist-box{width:calc(100% - 24px);max-width:none;padding:18px}.playlist-list{max-height:58vh}}
