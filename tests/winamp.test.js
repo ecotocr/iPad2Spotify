@@ -165,6 +165,7 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /remove_profile_id/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /remove-profile-modal/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /\/api\/auth\/pair\?avatar=/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /escapeHtml\(device\.name\)\+' - '\+escapeHtml\(device\.type\)/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /function createPlaylistUi/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /playlist-close/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /currently-playing\?playlist=1/);
