@@ -186,6 +186,8 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(css, /body\.minimalist \.player\.lyrics-visible~\.minimalist-exit\{top:calc\(12vh \+ 12px\);right:calc\(3vw \+ 12px\)\}/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /id\('playlist-question'\)\.textContent=\(data\.source==='queue'\?'Current queue':'Current playlist'\)\+' · '\+data\.total\+' tracks'/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /id\('playlist-message'\)\.textContent=data\.items\.length\?'Tap a track to play it\. The list will stay open\.':'There are no available tracks\.'/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /function playlistError\(data,fallback\).*typeof error\.message==='string'\?error\.message/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /id\('playlist-message'\)\.textContent=playlistError\(data,'Could not load the current playlist\.'\)/);
   assert.match(css, /\.volume-adjustment\{display:-webkit-box;display:-webkit-flex;display:flex/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
