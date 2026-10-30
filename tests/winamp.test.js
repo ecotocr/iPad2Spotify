@@ -166,6 +166,7 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /remove-profile-modal/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /\/api\/auth\/pair\?avatar=/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /escapeHtml\(device\.name\)\+' - '\+escapeHtml\(device\.type\)/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /Volume control unavailable/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /function createPlaylistUi/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /playlist-close/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /currently-playing\?playlist=1/);
@@ -182,6 +183,7 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(css, /\.controls \.round svg\{display:block;width:24px;height:24px;margin:auto;fill:#f5f1e8\}/);
   assert.match(css, /\.icon-prev:before,.icon-prev:after,.icon-next:before,.icon-next:after\{display:none;content:none\}/);
   assert.match(css, /#artist-question,#devices-question,#playlist-question\{font-family:Arial,"Helvetica Neue",sans-serif\}/);
+  assert.match(css, /\.playlist-box #playlist-question\{[^}]*font-family:Arial,"Helvetica Neue",sans-serif/);
   assert.match(css, /\.minimalist-exit\{top:calc\(15vh \+ 12px\);right:calc\(50vw - 35vh \+ 12px\);font-size:0;line-height:0\}/);
   assert.match(css, /body\.minimalist \.player\.lyrics-visible~\.minimalist-exit\{top:calc\(12vh \+ 12px\);right:calc\(3vw \+ 12px\)\}/);
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /id\('playlist-question'\)\.textContent=\(data\.source==='queue'\?'Current queue':'Current playlist'\)\+' · '\+data\.total\+' tracks'/);

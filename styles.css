@@ -116,7 +116,7 @@ body.minimalist .player.lyrics-visible .lyrics-panel pre{font-size:24px;font-wei
 .icon-next:after{-webkit-transform:translate(7px,-50%);transform:translate(7px,-50%)}
 .playlist-box{width:480px;max-width:90%;max-height:calc(100vh - 40px);overflow:hidden;padding:22px;text-align:left}
 .playlist-header{position:relative;min-height:42px;padding:4px 48px 0 0}
-.playlist-box #playlist-question{margin:0;color:#f5f1e8;font-family:Georgia,serif;font-size:23px}
+.playlist-box #playlist-question{margin:0;color:#f5f1e8;font-family:Arial,"Helvetica Neue",sans-serif;font-size:23px}
 .playlist-close{position:absolute;top:0;right:0;width:40px;height:40px;padding:0;border:1px solid #39443c;border-radius:3px;background:#252b28;color:#c5cec2;font-size:25px;line-height:36px;text-align:center;cursor:pointer}
 .playlist-box #playlist-message{margin:8px 0 12px}
 .playlist-list{max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
