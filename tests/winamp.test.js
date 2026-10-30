@@ -176,8 +176,13 @@ test('index.html hides visualizer controls and analysis status while keeping scr
   assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /data\.device_id\)playbackDeviceId=data\.device_id/);
   assert.match(css, /\.playlist-close\{position:absolute/);
   assert.match(css, /\.playlist-list\{max-height:55vh;overflow-y:auto/);
-  assert.match(css, /\.icon-prev:before\{[^}]*translate\(8px,-50%\)/);
-  assert.match(css, /\.icon-next:after\{[^}]*translate\(7px,-50%\)/);
+  assert.match(html, /id="previous"[^>]*><svg viewBox="0 0 24 24"/);
+  assert.match(html, /id="next"[^>]*><svg viewBox="0 0 24 24"/);
+  assert.match(css, /\.controls \.round svg\{display:block;width:24px;height:24px;margin:auto/);
+  assert.match(css, /\.icon-prev:before,.icon-prev:after,.icon-next:before,.icon-next:after\{display:none;content:none\}/);
+  assert.match(css, /#artist-question,#devices-question,#playlist-question\{font-family:Arial,"Helvetica Neue",sans-serif\}/);
+  assert.match(css, /\.minimalist-exit\{top:calc\(15vh \+ 12px\);right:calc\(50vw - 35vh \+ 12px\);font-size:0;line-height:0\}/);
+  assert.match(fs.readFileSync(path.join(root, 'app.js'), 'utf8'), /id\('playlist-message'\)\.textContent=data\.source==='queue'\?'Current queue':'Current playlist'/);
   assert.match(css, /\.volume-adjustment\{display:-webkit-box;display:-webkit-flex;display:flex/);
   assert.match(html, /href="winamp\.css/);
   assert.ok(html.indexOf('oldmilk.js') < html.indexOf('winamp.js') && html.indexOf('winamp.js') < html.indexOf('app.js'));
