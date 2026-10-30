@@ -101,6 +101,30 @@ test('starts a selected track at its position inside the playlist context', func
   });
 });
 
+test('starts a selected playlist track on the device returned by playlist playback state', function (t, done) {
+  var calledWith = null;
+  var restore = stubLib({
+    rateLimit: noKv, kvGet: noKv, spotifyToken: validToken,
+    request: function (url, options, cb) {
+      calledWith = { url: url, options: options };
+      cb(null, 204, null);
+    }
+  });
+  var res = helpers.fakeRes();
+  command(helpers.fakeReq('POST', '/api/spotify/command', SESSION_COOKIE, {
+    action: 'play_playlist_track', playlist_id: '37i9dQZF1DX4JAvHpjipBk', position: 56, device_id: 'speaker-device-123'
+  }), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(calledWith.url, 'https://api.spotify.com/v1/me/player/play?device_id=speaker-device-123');
+    assert.deepStrictEqual(JSON.parse(calledWith.options.body), {
+      context_uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk', offset: { position: 56 }
+    });
+    done();
+  });
+});
+
 test('plays a selected Spotify queue track by URI', function (t, done) {
   var calledWith = null;
   var restore = stubLib({
