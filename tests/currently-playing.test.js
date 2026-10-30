@@ -160,7 +160,34 @@ test('current playlist retries the legacy tracks endpoint when Spotify returns 4
   });
 });
 
-test('current playlist falls back to the Spotify queue when both playlist endpoints return 404', function (t, done) {
+test('current playlist retries the legacy tracks endpoint when Spotify denies the items endpoint', function (t, done) {
+  var urls = [];
+  var restore = stubLib(withRedisFree({
+    config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
+    spotifyToken: function (cfg, body, cb) { cb(null, 200, { access_token: 'at' }); },
+    request: function (url, options, cb) {
+      urls.push(url);
+      if (url.indexOf('/currently-playing') !== -1) {
+        return cb(null, 200, { context: { uri: 'spotify:playlist:37i9dQZF1DX4JAvHpjipBk' }, item: {} });
+      }
+      if (url.indexOf('/items?') !== -1) return cb(null, 403, { error: { status: 403, message: 'Endpoint unavailable' } });
+      cb(null, 200, { total: 1, items: [
+        { track: { type: 'track', uri: 'spotify:track:4NHQUGzhtTLFvgF5SZesLK', name: 'Current Song', artists: [{ name: 'Artist' }] } }
+      ] });
+    }
+  }));
+  var res = helpers.fakeRes();
+  currentlyPlaying(helpers.fakeReq('GET', '/api/spotify/currently-playing?playlist=1', SESSION_COOKIE), res);
+  setImmediate(function () {
+    restore();
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(helpers.resBody(res).items[0].name, 'Current Song');
+    assert.ok(urls[2].indexOf('/tracks?limit=50&offset=0') !== -1);
+    done();
+  });
+});
+
+test('current playlist falls back to the Spotify queue when both playlist endpoints deny access', function (t, done) {
   var urls = [];
   var restore = stubLib(withRedisFree({
     config: function () { return { id: 'id', secret: 'secret', redirect: 'r' }; },
@@ -174,7 +201,7 @@ test('current playlist falls back to the Spotify queue when both playlist endpoi
         });
       }
       if (url.indexOf('/items?') !== -1 || url.indexOf('/tracks?') !== -1) {
-        return cb(null, 404, { error: { status: 404, message: 'Resource not found' } });
+        return cb(null, 403, { error: { status: 403, message: 'Forbidden' } });
       }
       if (url.indexOf('/me/player/queue') !== -1) {
         return cb(null, 200, {

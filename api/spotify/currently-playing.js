@@ -37,12 +37,9 @@ function loadPlaylist(accessToken, playback, playlistId, requestedPlaylistId, pl
   function requestPlaylistItems(endpoint) {
     var playlistUrl = 'https://api.spotify.com/v1/playlists/' + playlistId + '/' + endpoint + '?limit=50&offset=' + playlistOffset;
     lib.request(playlistUrl, { headers: headers }, function (playlistErr, playlistStatus, playlistData) {
-      if (playlistStatus === 404 && endpoint === 'items') return requestPlaylistItems('tracks');
-      if (playlistStatus === 404 && endpoint === 'tracks') return loadCurrentQueue(accessToken, playback, res);
+      if ((playlistStatus === 403 || playlistStatus === 404) && endpoint === 'items') return requestPlaylistItems('tracks');
+      if ((playlistStatus === 403 || playlistStatus === 404) && endpoint === 'tracks') return loadCurrentQueue(accessToken, playback, res);
       if (playlistErr) return lib.json(res, 502, { error: 'Could not load the current playlist tracks.' });
-      if (playlistStatus === 403) {
-        return lib.json(res, 403, { error: 'Spotify has not granted playlist access to this profile. Use Add profile to authorize this account again with the new playlist permissions.' });
-      }
       if (playlistStatus !== 200 || !playlistData || !Array.isArray(playlistData.items)) {
         return lib.json(res, playlistStatus || 502, playlistData || { error: 'Spotify could not load the current playlist tracks.' });
       }
@@ -69,7 +66,6 @@ function loadCurrentQueue(accessToken, playback, res) {
   lib.request('https://api.spotify.com/v1/me/player/queue', { headers: { Authorization: 'Bearer ' + accessToken } }, function (queueErr, queueStatus, queueData) {
     if (queueErr) return lib.json(res, 502, { error: 'Could not load the current Spotify queue.' });
     if (queueStatus !== 200 || !queueData) {
-      if (queueStatus === 403) return lib.json(res, 403, { error: 'Spotify denied access to the playback queue. Reauthorize this account to refresh its playback permissions.' });
       return lib.json(res, queueStatus || 502, queueData || { error: 'Could not load the current Spotify queue.' });
     }
     var items = [];
